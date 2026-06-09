@@ -1,0 +1,8 @@
+/ykt_uslugi-back/.venv/
+/ykt_uslugi-back/venv/
+/ykt_uslugi-back/__pycache__/
+/ykt_uslugi-front/node_modules/
+/ykt_uslugi-front/dist/
+/ykt_uslugi-front/build/
+/ykt_uslugi-front/.env
+/ykt_uslugi-back/.env
