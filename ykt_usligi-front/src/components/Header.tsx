@@ -1,8 +1,8 @@
 export const Header = () => {
   return (
-    <header className="bg-slate-800 text-slate-400 py-4">
+    <header className="bg-white text-black py-4 shadow-md">
       <div className="container mx-auto px-4">
-        <h1 className="text-2xl font-bold">YKT Услуги</h1>
+        <h1 className="text-5xl font-bold">YKT</h1>
       </div>
     </header>
   );
