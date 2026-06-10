@@ -7,7 +7,7 @@ export interface ApiResponse<T> {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(status: number, message: string) {
     super(message);
   }
 }
