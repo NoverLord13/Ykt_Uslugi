@@ -1,25 +1,22 @@
 from pydantic import BaseModel, Field
+from pydantic_extra_types.phone_numbers import PhoneNumber
 
 
 class PhoneRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=20)
+    phone: PhoneNumber
+
+
+class VerifyCodeRequest(BaseModel):
+    phone: PhoneNumber
+    code: str = Field(..., min_length=4, max_length=4)
 
 
 class RegisterCompleteRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=20)
-    code: str = Field(..., min_length=4, max_length=4)
+    verification_token: str
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
     password: str = Field(..., min_length=6, max_length=128)
 
 
 class LoginRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=20)
+    login: str = Field(..., min_length=1, max_length=50)
     password: str = Field(..., min_length=1, max_length=128)
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class MessageResponse(BaseModel):
-    message: str
