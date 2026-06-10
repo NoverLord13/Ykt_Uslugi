@@ -1,3 +1,9 @@
+from datetime import datetime
+
+from sqlalchemy import String, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from database import Base
 
 
 class User(Base):
@@ -7,4 +13,4 @@ class User(Base):
     phone_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
