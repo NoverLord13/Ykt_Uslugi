@@ -14,7 +14,7 @@ interface ButtonProps{
 export const Button = (props:ButtonProps)=>
 {
     const {size,color,title,onClick} = props;
-    const defaultClass = "px-5 py-2.5 rounded-xl transition-all shadow-lg";
+    const defaultClass = "cursor-pointer px-5 py-2.5 rounded-xl transition-all shadow-lg";
 
     const classes = {
         colors:{

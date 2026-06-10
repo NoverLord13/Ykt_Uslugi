@@ -13,9 +13,6 @@ export const Home = () => {
                     <h1 className="text-4xl font-bold text-black mb-2">Uslugi Ykt</h1>
                 </div>
                 
-                {/* <button onClick={() => navigate('/adadder')} className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20">
-                    Добавить объявление
-                </button> */}
                 <Button
                     size="middle"
                     color="primary"
