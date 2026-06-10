@@ -1,9 +1,65 @@
-/ykt_uslugi-back/.venv/
-/ykt_uslugi-back/venv/
-/ykt_uslugi-back/__pycache__/
-/ykt_uslugi-front/node_modules/
-/ykt_uslugi-front/dist/
-/ykt_uslugi-front/build/
-/ykt_uslugi-front/.env
-/ykt_uslugi-back/.env
-/.vscode/
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Backend (FastAPI / SQLite)
+ykt_uslugi-back/app.db
+ykt_uslugi-back/*.db
+ykt_uslugi-back/*.sqlite
+ykt_uslugi-back/*.sqlite3
+
+# Frontend (Vite / React)
+ykt_usligi-front/node_modules/
+ykt_usligi-front/dist/
+ykt_usligi-front/dist-ssr/
+ykt_usligi-front/build/
+ykt_usligi-front/*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
