@@ -73,7 +73,7 @@ export const Register = () => {
 
   return (
     <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 border border-slate-800">
         <h1 className="text-2xl font-bold text-black mb-2">Регистрация</h1>
         <p className="text-slate-500 mb-6">
           {step === "phone" && "Шаг 1 из 3 — введите номер телефона"}

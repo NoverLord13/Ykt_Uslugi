@@ -1,6 +1,18 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { getToken } from '../api/auth';
+
+
 
 export const Header = () => {
+
+  const navigate = useNavigate();
+  const isAuthenticated = !!getToken();
+  const handleLogout = () => {
+      localStorage.removeItem('access_token');
+      navigate('/'); 
+      window.location.reload(); 
+    };
+
   return (
     <header className="w-full h-8 flex items-center bg-white text-black py-4 shadow-md">
         <nav className='w-full'>
@@ -8,17 +20,30 @@ export const Header = () => {
                 <li>
                     <Link to="/">YKT</Link>
                 </li>
-                <li>
-                    <Link to="/login">Войти</Link>
-                </li>
-                <li>
-                    <Link to="/register">Регистрация</Link>
-                </li>
+
+                {isAuthenticated?(
+                    <li>
+                        <button 
+                          onClick={handleLogout}
+                          className="text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                        >
+                          Выйти
+                        </button>
+                    </li>
+                ):(
+                  <>
+                    <li>
+                        <Link to="/login">Войти</Link>
+                    </li>
+                    <li>
+                        <Link to="/register">Регистрация</Link>
+                    </li>
+                  </>
+                )}
+                
             </ul>
         </nav>
-      {/*<div className="container mx-auto px-4">
-        <h1 className="text-5xl font-bold">YKT</h1>
-      </div>*/}
+      
     </header>
   );
 };

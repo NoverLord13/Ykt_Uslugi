@@ -17,23 +17,22 @@ interface InputProps{
 export const Input = (props:InputProps) => 
 {
   const {size,type,color,placeholder,value,onChange} = props;
-  const defaultClass = "border-none flex items-center rounded-2 h-[30px] w-[max-content] px-4 py-2 cursor-text";
-
+  const defaultClass = "border border-slate-200 flex items-center rounded-xl h-[30px] w-[max-content] px-4 py-3 cursor-text";
   const classes = {
     colors:{
       primary:{
-        text: "text-white",
-        frame: "bg-indigo-600",
+        text: "text-black",
+        frame: "bg-white",
       },
       secondary:{
-        text: "text-red-600",
-        frame: "bg-black",
+        text: "text-white",
+        frame: "bg-indigo-600",
       },
     },
     sizes:{
       small:"rounded-[100px] font-sm",
       middle:"rounded-[14px] font-medium min-h-[40px] min-w-[120]",
-      large:"rounded-[16px] font-base min-h-[56px] min-w-[200]",
+      large:"rounded-[16px] font-base min-h-[56px] min-w-[200] w-full",
     },
   };
 
