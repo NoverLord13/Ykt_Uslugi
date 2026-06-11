@@ -1,7 +1,7 @@
 import React from "react";
 
 type SizeType = "small" | "middle" | "large";
-type ColorType = "primary" | "secondary";
+type ColorType = "primary" | "secondary" | "third";
 
 interface ButtonProps{
     size: SizeType;
@@ -14,7 +14,7 @@ interface ButtonProps{
 export const Button = (props:ButtonProps)=>
 {
     const {size,color,title,onClick} = props;
-    const defaultClass = "cursor-pointer px-5 py-2.5 rounded-xl transition-all shadow-lg";
+    const defaultClass = "cursor-pointer px-5 py-2.5 rounded-xl transition-all";
 
     const classes = {
         colors:{
@@ -22,13 +22,19 @@ export const Button = (props:ButtonProps)=>
                 button: "bg-indigo-600",
                 text: "text-white",
                 hover: "hover:bg-indigo-500",
-                shadow: "shadow-indigo-600/20",
+                shadow: "shadow-indigo-600/20 shadow-lg",
             },
             secondary:{
-                button: "bg-red-500",
-                text: "text-white",
-                hover: "hover:bg-red-400",
-                shadow: "shadow-red-500/20",
+                button: "bg-white  flex-1 text-center",
+                text: "text-black",
+                hover: "",
+                shadow: "",
+            },
+            third:{
+                button: "bg-grey-300  flex-1 text-center",
+                text: "text-black",
+                hover: "",
+                shadow: "",
             },
         },
         sizes:{
