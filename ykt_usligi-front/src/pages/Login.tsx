@@ -52,7 +52,7 @@ export const Login = () => {
         throw new Error("Токен не получен");
       }
       setVerificationToken(response.data.verification_token);
-      handleComplete;
+      handleComplete();
       navigate("/");
       window.location.reload();
     } catch (e) {
