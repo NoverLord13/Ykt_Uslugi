@@ -31,6 +31,14 @@ export const api = {
     return response.data;
   },
 
+  getMyAdBlocks: async (): Promise<AdBlock[]> => {
+    const token = getToken();
+    const response = await axios.get(`${API_URL}/services/mine`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data.data;
+  },
+
   addAdBlock: async (formData: FormData) => {
     const token = getToken();
     const response = await axios.post(`${API_URL}/services`, formData, {

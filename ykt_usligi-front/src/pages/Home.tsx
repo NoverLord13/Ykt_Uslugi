@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { api, type AdBlock } from '../api/Api';
+import { getToken } from '../api/auth';
 
 export const Home = () => {
-
+    const isAuthenticated = !!getToken();
     const navigate = useNavigate();
 
     const [adBlock, setAdBlock] = useState<AdBlock[]>([]);
@@ -93,12 +94,23 @@ export const Home = () => {
                     <h1 className="text-4xl font-bold text-black mb-2">Uslugi Ykt</h1>
                 </div>
                 
-                <Button
-                    size="middle"
-                    color="primary"
-                    title="Добавить объявление"
-                    onClick={() => navigate('/adadder')}
-                />
+                <div className="flex gap-4">
+                    {isAuthenticated && (
+                        <Button
+                            size="middle"
+                            color="primary"
+                            title="Мои объявления"
+                            onClick={() => navigate('/MyAds')}
+                        />
+                    )}
+                    <Button
+                        size="middle"
+                        color="primary"
+                        title="Добавить объявление"
+                        onClick={() => navigate('/adadder')}
+                    />
+                </div>
+                
             </div>
 
             {adBlock.length === 0 && !isLoading ? (
@@ -109,7 +121,7 @@ export const Home = () => {
                         <div
                             key={ad.id}
                             onClick={() => navigate(`/Home/${ad.id}`)}
-                            className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-all duration-300 flex flex-col justify-between shadow-lg relative cursor-pointer hover:-translate-y-1"
+                            className="group bg-indigo-600 border bg-indigo-500 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between shadow-lg relative cursor-pointer hover:-translate-y-1"
                             >
                         <div>
                             <div className="overflow-hidden aspect-square bg-black">
@@ -122,7 +134,7 @@ export const Home = () => {
 
                             <div className="p-4">
                             <h3 className="font-bold text-lg text-white truncate">{ad.title}</h3>
-                            <p className="text-slate-400 text-xs mt-1 line-clamp-2">
+                            <p className="text-white 0 text-xs mt-1 line-clamp-2">
                                 {ad.description || 'Нет описания'}
                             </p>
                             </div>

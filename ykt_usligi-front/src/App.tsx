@@ -6,6 +6,7 @@ import { Login } from "./pages/Login";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { AdAdder } from "./pages/AdAdder";
+import { MyAds } from "./pages/MyAds";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
             <Route path="/register" element={<Register />}></Route>
             <Route path="/login" element={<Login />}></Route>
             <Route path="/adadder" element={<AdAdder />}></Route>
+            <Route path="/MyAds" element={<MyAds/>}></Route>
           </Routes>
       </main>
       
