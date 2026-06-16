@@ -7,6 +7,7 @@ import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { AdAdder } from "./pages/AdAdder";
 import { MyAds } from "./pages/MyAds";
+import {Profile} from "./pages/Profile"
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/login" element={<Login />}></Route>
             <Route path="/adadder" element={<AdAdder />}></Route>
             <Route path="/MyAds" element={<MyAds/>}></Route>
+            <Route path="/Profile" element={<Profile/>}></Route>
           </Routes>
       </main>
       
