@@ -55,6 +55,20 @@ export function login(login: string, password: string) {
   });
 }
 
+export function sendLoginCode(phone: string) {
+  return apiRequest<null>("/auth/login/phone/send-code", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export function verifyLoginCode(phone: string, code: string) {
+  return apiRequest<TokenData>("/auth/login/phone/verify-code", {
+    method: "POST",
+    body: JSON.stringify({ phone, code }),
+  });
+}
+
 export function saveToken(token: string) {
   localStorage.setItem("access_token", token);
 }

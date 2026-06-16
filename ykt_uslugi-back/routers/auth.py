@@ -99,3 +99,39 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
             user=UserRead.model_validate(user),
         ),
     )
+
+@router.post("/login/phone/send-code", response_model=ApiResponse[None])
+async def login_phone(body: PhoneRequest, db: Session = Depends(get_db)):
+    phone = phone_to_str(body.phone)
+    user = db.query(User).filter(User.phone_number == phone).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь с таким номером не найден")
+
+    try:
+        await send_code(phone)
+    except SmsRateLimitError as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc))
+
+    return ApiResponse(message="Код отправлен")
+
+@router.post("/login/phone/verify-code", response_model=ApiResponse[TokenData])
+def login_phone_verify(body: VerifyCodeRequest, db: Session = Depends(get_db)):
+    phone = phone_to_str(body.phone)
+    if not verify_code(phone, body.code):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный или просроченный код")
+
+    user = db.query(User).filter(User.phone_number == phone).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь с таким номером не найден")
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Аккаунт деактивирован")
+
+    return ApiResponse(
+        message="Вход выполнен",
+        data=TokenData(
+            access_token=create_access_token(user.id),
+            user=UserRead.model_validate(user),
+        ),
+    )
+

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { api, type AdBlock } from '../api/Api';
 import { getToken } from '../api/auth';
@@ -42,13 +42,6 @@ export const Home = () => {
         }
     }, [skip, isLoading, hasMore]);
 
-    // Обнова
-    const refreshGallery = () => {
-        setAdBlock([]);
-        setSkip(0);
-        setHasMore(true);
-    };
-
     // Скролл
     useEffect(() => {
         const target = observerTarget.current;
@@ -69,23 +62,6 @@ export const Home = () => {
         if (target) observer.unobserve(target);
         };
     }, [loadMoreArtworks, hasMore, isLoading]);
-
-    // Удаление
-    const handleDeleteArtwork = async (id: number, title: string) => {
-        const confirmed = window.confirm(
-        `Вы уверены, что хотите окончательно удалить картину "${title}"?\nЭто действие сотрет её файл с диска сервера.`
-        );
-
-        if (!confirmed) return;
-
-        try {
-        await api.deleteAdBlock(id);
-        setAdBlock((prev) => prev.filter((art) => art.id !== id));
-        alert('Картина успешно удалена.');
-        } catch (error) {
-        alert('Не удалось удалить картину.');
-        }
-    };
 
     return (
         <div className="p-6 max-w-7xl mx-auto text-slate-200 mt-6">

@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { api } from '../api/Api';
 import {
   ApiError,
 } from "../api/client";
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
-  completeRegistration,
   saveToken,
-  sendRegisterCode,
-  verifyRegisterCode,
-  login
+  login,
+  sendLoginCode,
+  verifyLoginCode
 } from "../api/auth";
 
 type Step = "phone" | "code";
@@ -22,7 +20,6 @@ export const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState("");
-  const [verificationToken, setVerificationToken] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<Step>("phone");
   const [switcher, setSwitcher] = useState(true);
@@ -34,7 +31,7 @@ export const Login = () => {
       setError("");
       setLoading(true);
       try {
-        await sendRegisterCode(phone);
+        await sendLoginCode(phone);
         setStep("code");
       } catch (e) {
         setError(e instanceof ApiError ? e.message : "Не удалось отправить код");
@@ -47,12 +44,11 @@ export const Login = () => {
     setError("");
     setLoading(true);
     try {
-      const response = await verifyRegisterCode(phone, code);
-      if (!response.data?.verification_token) {
+      const response = await verifyLoginCode(phone, code);
+      if (!response.data?.access_token) {
         throw new Error("Токен не получен");
       }
-      setVerificationToken(response.data.verification_token);
-      handleComplete();
+      saveToken(response.data.access_token);
       navigate("/");
       window.location.reload();
     } catch (e) {
@@ -62,21 +58,6 @@ export const Login = () => {
     }
   };
 
-  const handleComplete = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const response = await login(username, password);
-      if (!response.data?.access_token) {
-        throw new Error("Токен не получен");
-      }
-      saveToken(response.data.access_token);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось завершить авторизацию");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogin = async () => {
     setError('');
@@ -88,6 +69,9 @@ export const Login = () => {
 
     try {
       const data = await login(username.trim(), password);
+      if (!data.data?.access_token) {
+        throw new Error("Токен не получен");
+      }
       
       saveToken(data.data.access_token);
 
