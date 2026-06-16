@@ -1,13 +1,14 @@
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from database import get_db
 from dependencies import get_current_user
 from models.service import Service
+from models.service import Tag
 from models.user import User
-from schemas.common import ApiResponse, ServiceRead
+from schemas.common import ApiResponse, ServiceRead, TagRead
 from schemas.service import ServiceUpdate
 from services.files import save_upload
 
@@ -47,6 +48,12 @@ def list_my_services(current_user: User = Depends(get_current_user), db: Session
         data=[_to_service_read(s) for s in services],
     )
 
+@router.get("/tags", response_model=ApiResponse[list[TagRead]])
+def get_all_tags(db: Session = Depends(get_db)):
+    tags = db.query(Tag).all()
+    # Форматируем список через Pydantic
+    tags_data = [TagRead(id=t.id, name=t.name) for t in tags]
+    return ApiResponse(message="Список тегов получен", data=tags_data)
 
 @router.get("/{service_id}", response_model=ApiResponse[ServiceRead])
 def get_service(service_id: int, db: Session = Depends(get_db)):
@@ -67,21 +74,43 @@ async def create_service(
     description: str = Form(..., min_length=1, max_length=5000),
     price: Decimal = Form(..., ge=0),
     image: UploadFile = File(...),
+    # Принимаем список ID тегов из формы:
+    tag_ids: list[int] = Form([]), 
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # 1. Получаем объекты тегов из базы данных по переданным ID
+    selected_tags = []
+    if tag_ids:
+        selected_tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
+
+    # 2. Сохраняем картинку услуги
     image_url = await save_upload(image)
+    
+    # 3. Создаем услугу и передаем список объектов тегов в поле tags
     service = Service(
         owner_id=current_user.id,
         title=title,
         description=description,
         price=price,
         image_url=image_url,
+        tags=selected_tags  # SQLAlchemy автоматически заполнит таблицу связи!
     )
     db.add(service)
     db.commit()
     db.refresh(service)
-    service = db.query(Service).options(joinedload(Service.owner)).filter(Service.id == service.id).first()
+    
+    # 4. Загружаем услугу заново, подтягивая и автора (joinedload), и теги (selectinload)
+    service = (
+        db.query(Service)
+        .options(
+            joinedload(Service.owner),
+            selectinload(Service.tags)
+        )
+        .filter(Service.id == service.id)
+        .first()
+    )
+    
     return ApiResponse(message="Услуга создана", data=_to_service_read(service))
 
 
@@ -131,3 +160,5 @@ def delete_service(
     db.delete(service)
     db.commit()
     return ApiResponse(message="Услуга удалена")
+
+

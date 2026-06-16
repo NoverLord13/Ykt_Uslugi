@@ -51,5 +51,11 @@ class ServiceRead(BaseModel):
     image_url: str | None
     is_active: bool
     owner: UserBrief
+    tags: list[TagRead] = []  # Список тегов, привязанных к услуге
     created_at: datetime
     updated_at: datetime
+
+class TagRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
