@@ -1,7 +1,7 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { api } from '../api/Api';
+import { api, type Tag } from '../api/Api';
 import { useNavigate } from 'react-router-dom';
 
 export const AdAdder = () => {
@@ -13,7 +13,21 @@ export const AdAdder = () => {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [price, setPrice] = useState('');
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
 
+
+  useEffect(() => {
+    api.getTags().then(setTags);
+  }, []);
+
+  const toggleTag = (tagId: number) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId)
+        ? prev.filter((id) => id !== tagId)
+        : [...prev, tagId]
+    );
+  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -32,6 +46,9 @@ export const AdAdder = () => {
     formData.append('title', title);
     formData.append('description', description);
     formData.append('price', price);
+    selectedTagIds.forEach((id) => {
+      formData.append('tag_ids', String(id));
+    });
     formData.append('image', file); 
 
     try {
@@ -67,13 +84,27 @@ export const AdAdder = () => {
           <div>
             <label className="block text-sm font-medium text-black mb-1">Описание:</label>
             <Input 
-              size="middle" 
+              size="description" 
               color="primary" 
               type="text" 
               placeholder="Опишите подробно что вам нужно" 
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
             />
+          </div>
+
+          <div>
+            {tags.map((tag) => (
+              <label key={tag.id} className="block text-sm font-medium text-black mb-1">
+                <input
+                  type="checkbox"
+                  checked={selectedTagIds.includes(tag.id)}
+                  onChange={() => toggleTag(tag.id)}
+                  className="rounded-[14px] font-medium min-h-[40px] min-w-[120] text-black placeholder:text-gray-400 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                />
+                {tag.name}
+              </label>
+            ))}
           </div>
 
           <div>

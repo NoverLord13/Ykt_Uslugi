@@ -41,6 +41,12 @@ class VerificationTokenData(BaseModel):
     verification_token: str
 
 
+class TagRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+
+
 class ServiceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,8 +60,3 @@ class ServiceRead(BaseModel):
     tags: list[TagRead] = []  # Список тегов, привязанных к услуге
     created_at: datetime
     updated_at: datetime
-
-class TagRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    name: str

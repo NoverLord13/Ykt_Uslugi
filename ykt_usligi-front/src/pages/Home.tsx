@@ -109,10 +109,15 @@ export const Home = () => {
                             </div>
 
                             <div className="p-4">
-                            <h3 className="font-bold text-lg text-white truncate">{ad.title}</h3>
-                            <p className="text-white 0 text-xs mt-1 line-clamp-2">
-                                {ad.description || 'Нет описания'}
-                            </p>
+                                <h3 className="font-bold text-lg text-white truncate">{ad.title}</h3>
+                                <p className="text-white 0 text-xs mt-1 line-clamp-2">
+                                    {ad.description}
+                                </p>
+                                {ad.tags.map((tag) => (
+                                        <span key={tag.id} className="text-white 0 text-xs mt-1 line-clamp-2" >
+                                            {tag.name + " "}
+                                        </span>
+                                        ))}
                             </div>
                         </div>
 

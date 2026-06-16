@@ -38,7 +38,9 @@ def list_services(db: Session = Depends(get_db)):
 def list_my_services(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     services = (
         db.query(Service)
-        .options(joinedload(Service.owner))
+        .options(
+            joinedload(Service.owner),
+            selectinload(Service.tags),)
         .filter(Service.owner_id == current_user.id)
         .order_by(Service.created_at.desc())
         .all()

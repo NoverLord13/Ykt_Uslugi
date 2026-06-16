@@ -10,10 +10,16 @@ export interface AdBlock{
   price: number
   image_url: string
   is_active: boolean
+  tags: Tag[]
   owner:{
     id: number
     username: string
   }
+}
+
+export interface Tag{
+  id: number
+  name: string
 }
 
 export const api = {
@@ -56,6 +62,11 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` }
     });
     return response.data;
+  },
+
+  getTags: async (): Promise<Tag[]> => {
+    const response = await axios.get(`${API_URL}/services/tags`);
+    return response.data.data;
   },
 };
 
