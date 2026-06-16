@@ -6,12 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import UPLOAD_DIR
-from database import Base, engine, seed_tags  # <-- Импортируем функцию сидинга
-from models import service, user  # <-- Убедитесь, что модель Tag импортирована для создания таблицы
-from routers import admin, auth, services
-
-# Создание таблиц (если их нет)
-Base.metadata.create_all(bind=engine)
+from database import seed_categories, seed_tags
+from models import review, service, user
+from routers import admin, auth, categories, services, users
 
 # Создание папки для загрузок
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
@@ -22,6 +19,7 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 async def lifespan(app: FastAPI):
     # Код здесь выполняется ДО того, как приложение начнет принимать запросы
     seed_tags()  # Наполняем базу тегами
+    seed_categories()
     yield
     # Код здесь выполнится при выключении сервера (если нужно)
 
@@ -39,7 +37,9 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(auth.router)
+app.include_router(categories.router)
 app.include_router(services.router)
+app.include_router(users.router)
 app.include_router(admin.router)
 
 
