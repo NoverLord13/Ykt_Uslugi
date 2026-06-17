@@ -17,16 +17,16 @@ interface InputProps{
 export const Input = (props:InputProps) => 
 {
   const {size,type,color,placeholder,value,onChange} = props;
-  const defaultClass = "border border-slate-200 flex items-center rounded-xl  ] px-4 py-3 cursor-text";
+  const defaultClass = "border border-[#E1E4EA] flex items-center rounded-xl px-4 py-3 cursor-text outline-none transition-colors";
   const classes = {
     colors:{
       primary:{
-        text: "text-black",
-        frame: "bg-white focus:ring-indigo-600 focus:border-indigo-600",
+        text: "text-[#1A1A1A]",
+        frame: "bg-white focus:ring-[#2F6FED] focus:border-[#2F6FED]",
       },
       secondary:{
         text: "text-white",
-        frame: "bg-indigo-600",
+        frame: "bg-[#2F6FED]",
       },
     },
     sizes:{
@@ -52,6 +52,6 @@ export const Input = (props:InputProps) =>
       placeholder={placeholder}
       value={value}
       onChange={onChange}
-      border-none />
+      />
   );
 };

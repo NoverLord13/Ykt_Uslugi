@@ -14,26 +14,26 @@ interface ButtonProps{
 export const Button = (props:ButtonProps)=>
 {
     const {size,color,title,onClick} = props;
-    const defaultClass = "cursor-pointer px-5 py-2.5 rounded-xl transition-all";
+    const defaultClass = "cursor-pointer px-5 py-2.5 rounded-xl transition-all font-semibold inline-flex items-center justify-center";
 
     const classes = {
         colors:{
             primary:{
-                button: "bg-indigo-600",
+                button: "bg-[#2F6FED]",
                 text: "text-white",
-                hover: "hover:bg-indigo-500",
-                shadow: "shadow-indigo-600/20 shadow-lg",
+                hover: "hover:bg-[#245DCC]",
+                shadow: "shadow-[#2F6FED]/20 shadow-lg",
             },
             secondary:{
-                button: "bg-white  flex-1 text-center",
-                text: "text-black",
-                hover: "",
+                button: "bg-white border border-[#E1E4EA] flex-1 text-center",
+                text: "text-[#1A1A1A]",
+                hover: "hover:bg-[#F2F3F5]",
                 shadow: "",
             },
             third:{
-                button: "bg-grey-300  flex-1 text-center",
-                text: "text-black",
-                hover: "",
+                button: "bg-[#F2F3F5] flex-1 text-center",
+                text: "text-[#1A1A1A]",
+                hover: "hover:bg-white",
                 shadow: "",
             },
         },
@@ -65,4 +65,3 @@ export const Button = (props:ButtonProps)=>
         </div>
     );
 };
-

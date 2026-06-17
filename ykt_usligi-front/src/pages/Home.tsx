@@ -5,6 +5,7 @@ import {
     api,
     fileUrl,
     formatPrice,
+    getApiErrorMessage,
     listingTypeLabel,
     type AdBlock,
     type Category,
@@ -42,7 +43,7 @@ export const Home = () => {
             .then(setCategories)
             .catch((err) => {
                 console.error(err);
-                setError('Не удалось загрузить категории');
+                setError(getApiErrorMessage(err, 'Не удалось загрузить категории'));
             });
     }, []);
 
@@ -72,7 +73,7 @@ export const Home = () => {
             setHasMore(data.length === LIMIT);
         } catch (err) {
             console.error(err);
-            setError('Не удалось загрузить объявления');
+            setError(getApiErrorMessage(err, 'Не удалось загрузить объявления'));
         } finally {
             setIsLoading(false);
         }
@@ -103,7 +104,7 @@ export const Home = () => {
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-4xl font-bold text-black">Uslugi Ykt</h1>
-                    <p className="mt-1 text-slate-500">Объявления услуг и запросов в Якутске</p>
+                    <p className="mt-1 text-[#8A8F99]">Объявления услуг и запросов в Якутске</p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -115,10 +116,10 @@ export const Home = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-                <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 text-black shadow-sm lg:sticky lg:top-6">
+                <aside className="h-fit rounded-2xl border border-[#E1E4EA] bg-white p-4 text-black shadow-sm lg:sticky lg:top-6">
                     <form className="space-y-5" onSubmit={handleSearchSubmit}>
                         <div>
-                            <h2 className="text-lg font-bold text-slate-950">Фильтры</h2>
+                            <h2 className="text-lg font-bold text-[#1A1A1A]">Фильтры</h2>
                         </div>
 
                         <label className="block">
@@ -127,7 +128,7 @@ export const Home = () => {
                                 value={search}
                                 onChange={(event) => setSearch(event.target.value)}
                                 placeholder="Например: сантехник"
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none focus:border-[#2F6FED]"
                             />
                         </label>
 
@@ -145,7 +146,7 @@ export const Home = () => {
                                             name="service-mode"
                                             checked={serviceMode === value}
                                             onChange={() => setServiceMode(value as ServiceMode)}
-                                            className="h-4 w-4 accent-indigo-600"
+                                            className="h-4 w-4 accent-[#2F6FED]"
                                         />
                                         {label}
                                     </label>
@@ -158,7 +159,7 @@ export const Home = () => {
                             <select
                                 value={categoryId}
                                 onChange={(event) => setCategoryId(event.target.value)}
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none focus:border-[#2F6FED]"
                             >
                                 <option value="">Все категории</option>
                                 {categories.map((category) => (
@@ -173,7 +174,7 @@ export const Home = () => {
                                 value={subcategoryId}
                                 onChange={(event) => setSubcategoryId(event.target.value)}
                                 disabled={!selectedCategory}
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none disabled:bg-slate-100 focus:border-indigo-600"
+                                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none disabled:bg-[#F2F3F5] focus:border-[#2F6FED]"
                             >
                                 <option value="">Все подкатегории</option>
                                 {selectedCategory?.subcategories.map((subcategory) => (
@@ -189,7 +190,7 @@ export const Home = () => {
                                     type="number"
                                     value={minPrice}
                                     onChange={(event) => setMinPrice(event.target.value)}
-                                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                    className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none focus:border-[#2F6FED]"
                                 />
                             </label>
                             <label className="block">
@@ -198,7 +199,7 @@ export const Home = () => {
                                     type="number"
                                     value={maxPrice}
                                     onChange={(event) => setMaxPrice(event.target.value)}
-                                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                    className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none focus:border-[#2F6FED]"
                                 />
                             </label>
                         </div>
@@ -208,7 +209,7 @@ export const Home = () => {
                             <select
                                 value={sort}
                                 onChange={(event) => setSort(event.target.value as SortMode)}
-                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none focus:border-[#2F6FED]"
                             >
                                 <option value="newest">Сначала новые</option>
                                 <option value="oldest">Сначала старые</option>
@@ -218,10 +219,10 @@ export const Home = () => {
                         </label>
 
                         <div className="flex gap-2">
-                            <button type="submit" className="flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+                            <button type="submit" className="flex-1 rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
                                 Найти
                             </button>
-                            <button type="button" onClick={clearFilters} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                            <button type="button" onClick={clearFilters} className="rounded-xl border border-[#E1E4EA] px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#F2F3F5]">
                                 Сброс
                             </button>
                         </div>
@@ -232,7 +233,7 @@ export const Home = () => {
                     {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
 
                     {ads.length === 0 && !isLoading ? (
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center text-slate-500">
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center text-[#8A8F99]">
                             Пока нет объявлений по выбранным фильтрам
                         </div>
                     ) : (
@@ -241,9 +242,9 @@ export const Home = () => {
                                 <article
                                     key={ad.id}
                                     onClick={() => navigate(`/services/${ad.id}`)}
-                                    className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                                    className="group cursor-pointer overflow-hidden rounded-2xl border border-[#E1E4EA] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
                                 >
-                                    <div className="aspect-[4/3] overflow-hidden bg-slate-100">
+                                    <div className="aspect-[4/3] overflow-hidden bg-[#F2F3F5]">
                                         {(ad.image_url || ad.images[0]?.url) ? (
                                             <img
                                                 src={fileUrl(ad.images[0]?.url || ad.image_url)}
@@ -257,27 +258,27 @@ export const Home = () => {
 
                                     <div className="space-y-3 p-4">
                                         <div className="flex flex-wrap gap-2">
-                                            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                                            <span className="rounded-full bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#2F6FED]">
                                                 {listingTypeLabel(ad.listing_type)}
                                             </span>
-                                            {ad.category && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{ad.category.name}</span>}
+                                            {ad.category && <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-xs text-slate-600">{ad.category.name}</span>}
                                         </div>
-                                        <h3 className="line-clamp-2 min-h-12 font-bold text-slate-950">{ad.title}</h3>
-                                        <p className="text-lg font-bold text-indigo-600">{formatPrice(ad)}</p>
-                                        {ad.location && <p className="text-sm text-slate-500">{ad.location}</p>}
+                                        <h3 className="line-clamp-2 min-h-12 font-bold text-[#1A1A1A]">{ad.title}</h3>
+                                        <p className="text-lg font-bold text-[#2F6FED]">{formatPrice(ad)}</p>
+                                        {ad.location && <p className="text-sm text-[#8A8F99]">{ad.location}</p>}
                                     </div>
                                 </article>
                             ))}
                         </div>
                     )}
 
-                    <div className="py-8 text-center text-sm text-slate-500">
+                    <div className="py-8 text-center text-sm text-[#8A8F99]">
                         {isLoading && 'Загрузка объявлений...'}
                         {!isLoading && hasMore && ads.length > 0 && (
                             <button
                                 type="button"
                                 onClick={() => loadAds(skip, true)}
-                                className="rounded-xl border border-slate-200 bg-white px-5 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+                                className="rounded-xl border border-[#E1E4EA] bg-white px-5 py-2 font-semibold text-slate-700 hover:bg-[#F2F3F5]"
                             >
                                 Показать еще
                             </button>

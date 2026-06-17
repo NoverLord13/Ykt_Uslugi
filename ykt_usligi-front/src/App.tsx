@@ -9,6 +9,7 @@ import { AdAdder } from "./pages/AdAdder";
 import { MyAds } from "./pages/MyAds";
 import {Profile} from "./pages/Profile"
 import { ServiceDetails } from "./pages/ServiceDetails";
+import { AdEditor } from "./pages/AdEditor";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="/profile" element={<Profile/>}></Route>
             <Route path="/users/:id" element={<Profile/>}></Route>
             <Route path="/services/:id" element={<ServiceDetails />}></Route>
+            <Route path="/services/:id/edit" element={<AdEditor />}></Route>
           </Routes>
       </main>
       

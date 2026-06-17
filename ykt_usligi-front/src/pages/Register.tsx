@@ -10,6 +10,7 @@ import {
   sendRegisterCode,
   verifyRegisterCode,
 } from "../api/auth";
+import { getApiErrorMessage } from '../api/Api';
 
 type Step = "phone" | "code" | "credentials";
 
@@ -31,7 +32,7 @@ export const Register = () => {
       await sendRegisterCode(phone);
       setStep("code");
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось отправить код");
+      setError(getApiErrorMessage(e, e instanceof ApiError ? e.message : "Не удалось отправить код"));
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,7 @@ export const Register = () => {
       setVerificationToken(response.data.verification_token);
       setStep("credentials");
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Неверный код");
+      setError(getApiErrorMessage(e, e instanceof ApiError ? e.message : "Неверный код"));
     } finally {
       setLoading(false);
     }
@@ -63,9 +64,10 @@ export const Register = () => {
         throw new Error("Токен не получен");
       }
       saveToken(response.data.access_token);
+      window.dispatchEvent(new Event('auth-change'));
       navigate("/");
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось завершить регистрацию");
+      setError(getApiErrorMessage(e, e instanceof ApiError ? e.message : "Не удалось завершить регистрацию"));
     } finally {
       setLoading(false);
     }
@@ -75,7 +77,7 @@ export const Register = () => {
     <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 border border-slate-800">
         <h1 className="text-2xl font-bold text-black mb-2">Регистрация</h1>
-        <p className="text-slate-500 mb-6">
+        <p className="text-[#8A8F99] mb-6">
           {step === "phone" && "Шаг 1 из 3 — введите номер телефона"}
           {step === "code" && "Шаг 2 из 3 — введите код из SMS"}
           {step === "credentials" && "Шаг 3 из 3 — придумайте логин и пароль"}
@@ -92,7 +94,7 @@ export const Register = () => {
               placeholder="+7 999 123-45-67"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-black"
+              className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
             />
             <Button
               size="middle"
@@ -111,7 +113,7 @@ export const Register = () => {
               maxLength={4}
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-black"
+              className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
             />
             <Button
               size="middle"
@@ -122,7 +124,7 @@ export const Register = () => {
             <button
               type="button"
               onClick={() => setStep("phone")}
-              className="text-sm text-indigo-600 hover:underline"
+              className="text-sm text-[#2F6FED] hover:underline"
             >
               Изменить номер
             </button>
@@ -136,14 +138,14 @@ export const Register = () => {
               placeholder="Имя пользователя"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-black"
+              className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
             />
             <input
               type="password"
               placeholder="Пароль (минимум 6 символов)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-black"
+              className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
             />
             <Button
               size="middle"
@@ -154,9 +156,9 @@ export const Register = () => {
           </div>
         )}
 
-        <p className="mt-6 text-sm text-slate-500 text-center">
+        <p className="mt-6 text-sm text-[#8A8F99] text-center">
           Уже есть аккаунт?{" "}
-          <Link to="/login" className="text-indigo-600 hover:underline">
+          <Link to="/login" className="text-[#2F6FED] hover:underline">
             Войти
           </Link>
         </p>

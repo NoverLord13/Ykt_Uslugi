@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type Category } from '../api/Api';
+import { api, getApiErrorMessage, type Category } from '../api/Api';
 
 export const AdAdder = () => {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export const AdAdder = () => {
       .then(setCategories)
       .catch((err) => {
         console.error(err);
-        setError('Не удалось загрузить категории');
+        setError(getApiErrorMessage(err, 'Не удалось загрузить категории'));
       });
   }, []);
 
@@ -65,7 +65,7 @@ export const AdAdder = () => {
       navigate(`/services/${created.id}`);
     } catch (err) {
       console.error(err);
-      setError('Ошибка при создании объявления. Проверьте авторизацию и данные формы.');
+      setError(getApiErrorMessage(err, 'Ошибка при создании объявления. Проверьте авторизацию и данные формы.'));
     } finally {
       setIsSaving(false);
     }
@@ -74,8 +74,8 @@ export const AdAdder = () => {
   return (
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
       <div className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <h1 className="mb-2 text-2xl font-bold text-slate-950">Добавить объявление</h1>
-        <p className="mb-6 text-sm text-slate-500">Укажите детали услуги или запроса, чтобы объявление было понятнее.</p>
+        <h1 className="mb-2 text-2xl font-bold text-[#1A1A1A]">Добавить объявление</h1>
+        <p className="mb-6 text-sm text-[#8A8F99]">Укажите детали услуги или запроса, чтобы объявление было понятнее.</p>
 
         {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
 
@@ -86,7 +86,7 @@ export const AdAdder = () => {
               <select
                 value={listingType}
                 onChange={(event) => setListingType(event.target.value as 'offer' | 'request')}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
               >
                 <option value="offer">Оказываю услугу</option>
                 <option value="request">Ищу услугу</option>
@@ -98,7 +98,7 @@ export const AdAdder = () => {
               <select
                 value={priceType}
                 onChange={(event) => setPriceType(event.target.value as 'fixed' | 'from' | 'negotiable')}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
               >
                 <option value="fixed">Фиксированная</option>
                 <option value="from">От указанной суммы</option>
@@ -113,7 +113,7 @@ export const AdAdder = () => {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Например: Услуги сантехника"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+              className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
             />
           </label>
 
@@ -124,7 +124,7 @@ export const AdAdder = () => {
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Подробно опишите услугу или запрос"
               rows={7}
-              className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+              className="w-full resize-y rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
             />
           </label>
 
@@ -135,7 +135,7 @@ export const AdAdder = () => {
                 type="number"
                 value={price}
                 onChange={(event) => setPrice(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
               />
             </label>
 
@@ -145,7 +145,7 @@ export const AdAdder = () => {
                 value={location}
                 onChange={(event) => setLocation(event.target.value)}
                 placeholder="Якутск, район"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
               />
             </label>
           </div>
@@ -156,7 +156,7 @@ export const AdAdder = () => {
               <select
                 value={categoryId}
                 onChange={(event) => setCategoryId(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
               >
                 <option value="">Не выбрано</option>
                 {categories.map((category) => (
@@ -171,7 +171,7 @@ export const AdAdder = () => {
                 value={subcategoryId}
                 onChange={(event) => setSubcategoryId(event.target.value)}
                 disabled={!selectedCategory}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none disabled:bg-slate-100 focus:border-indigo-600"
+                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none disabled:bg-[#F2F3F5] focus:border-[#2F6FED]"
               >
                 <option value="">Не выбрано</option>
                 {selectedCategory?.subcategories.map((subcategory) => (
@@ -188,7 +188,7 @@ export const AdAdder = () => {
               value={contactPhone}
               onChange={(event) => setContactPhone(event.target.value)}
               placeholder="+7 999 123-45-67"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-black outline-none focus:border-indigo-600"
+              className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
             />
           </label>
 
@@ -199,7 +199,7 @@ export const AdAdder = () => {
               accept="image/*"
               multiple
               onChange={handleFileChange}
-              className="block w-full text-sm text-black file:mr-4 file:rounded-xl file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-indigo-500"
+              className="block w-full text-sm text-black file:mr-4 file:rounded-xl file:border-0 file:bg-[#2F6FED] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#245DCC]"
             />
             <span className="mt-1 block text-xs text-slate-400">Можно выбрать до 8 фото</span>
           </label>
@@ -219,14 +219,14 @@ export const AdAdder = () => {
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={() => navigate('/')} className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => navigate('/')} className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#F2F3F5]">
             Отмена
           </button>
           <button
             type="button"
             onClick={handleUpload}
             disabled={isSaving}
-            className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+            className="rounded-xl bg-[#2F6FED] px-5 py-2 text-sm font-semibold text-white hover:bg-[#245DCC] disabled:opacity-60"
           >
             {isSaving ? 'Сохранение...' : 'Создать'}
           </button>

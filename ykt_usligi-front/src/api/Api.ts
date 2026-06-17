@@ -119,6 +119,30 @@ const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
   return response.data.data;
 };
 
+export const getApiErrorMessage = (error: unknown, fallback = 'Ошибка запроса') => {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { detail?: unknown; message?: unknown } | undefined;
+    const detail = data?.detail;
+
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      return detail
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object' && 'msg' in item) return String(item.msg);
+          return null;
+        })
+        .filter(Boolean)
+        .join(', ');
+    }
+    if (typeof data?.message === 'string') return data.message;
+    if (error.message) return error.message;
+  }
+
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
+
 export const fileUrl = (path?: string | null) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;

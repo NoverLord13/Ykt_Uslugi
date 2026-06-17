@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, fileUrl, formatPrice, type AdBlock, type Review, type UserProfile } from '../api/Api';
+import { api, fileUrl, formatPrice, getApiErrorMessage, type AdBlock, type Review, type UserProfile } from '../api/Api';
 import { getToken } from '../api/auth';
 
 export const Profile = () => {
@@ -47,7 +47,7 @@ export const Profile = () => {
         setReviews(reviewsData);
       } catch (err) {
         console.error(err);
-        setError('Не удалось загрузить профиль');
+        setError(getApiErrorMessage(err, 'Не удалось загрузить профиль'));
       } finally {
         setIsLoading(false);
       }
@@ -63,7 +63,7 @@ export const Profile = () => {
       setProfile(updated);
     } catch (err) {
       console.error(err);
-      setError('Не удалось сохранить профиль');
+      setError(getApiErrorMessage(err, 'Не удалось сохранить профиль'));
     }
   };
 
@@ -75,7 +75,7 @@ export const Profile = () => {
       setAvatarFile(null);
     } catch (err) {
       console.error(err);
-      setError('Не удалось загрузить аватар');
+      setError(getApiErrorMessage(err, 'Не удалось загрузить аватар'));
     }
   };
 
@@ -92,12 +92,12 @@ export const Profile = () => {
       setReviewRating(5);
     } catch (err) {
       console.error(err);
-      setError('Не удалось оставить отзыв');
+      setError(getApiErrorMessage(err, 'Не удалось оставить отзыв'));
     }
   };
 
   if (isLoading) {
-    return <div className="mx-auto max-w-5xl p-6 text-center text-slate-500">Загрузка профиля...</div>;
+    return <div className="mx-auto max-w-5xl p-6 text-center text-[#8A8F99]">Загрузка профиля...</div>;
   }
 
   if (error || !profile) {
@@ -108,7 +108,7 @@ export const Profile = () => {
     <div className="mx-auto max-w-5xl p-4 sm:p-6 space-y-8">
       <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          <div className="h-28 w-28 overflow-hidden rounded-full bg-indigo-100 text-center text-3xl font-bold text-indigo-700">
+          <div className="h-28 w-28 overflow-hidden rounded-full bg-indigo-100 text-center text-3xl font-bold text-[#2F6FED]">
             {profile.avatar_url ? (
               <img src={fileUrl(profile.avatar_url)} alt={profile.username} className="h-full w-full object-cover" />
             ) : (
@@ -118,17 +118,17 @@ export const Profile = () => {
 
           <div className="flex-1 space-y-3">
             <div>
-              <h1 className="text-3xl font-bold text-slate-950">{profile.display_name || profile.username}</h1>
-              <p className="text-sm text-slate-500">@{profile.username}</p>
+              <h1 className="text-3xl font-bold text-[#1A1A1A]">{profile.display_name || profile.username}</h1>
+              <p className="text-sm text-[#8A8F99]">@{profile.username}</p>
             </div>
 
             {profile.bio && <p className="max-w-3xl text-slate-700">{profile.bio}</p>}
-            {profile.location && <p className="text-sm text-slate-500">Локация: {profile.location}</p>}
+            {profile.location && <p className="text-sm text-[#8A8F99]">Локация: {profile.location}</p>}
 
             <div className="flex flex-wrap gap-2 text-sm">
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">Объявлений: {ads.length}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">Отзывов: {profile.reviews_count ?? reviews.length}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+              <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">Объявлений: {ads.length}</span>
+              <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">Отзывов: {profile.reviews_count ?? reviews.length}</span>
+              <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">
                 Рейтинг: {profile.rating_avg ? profile.rating_avg.toFixed(1) : 'нет'}
               </span>
             </div>
@@ -136,29 +136,29 @@ export const Profile = () => {
         </div>
 
         {canEdit && (
-          <div className="mt-6 grid gap-4 rounded-2xl border bg-slate-50 p-4">
+          <div className="mt-6 grid gap-4 rounded-2xl border bg-[#F2F3F5] p-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-slate-700">Имя</span>
-                <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-indigo-600" />
+                <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-slate-700">Локация</span>
-                <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-indigo-600" />
+                <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
               </label>
             </div>
 
             <label className="block">
               <span className="mb-1 block text-sm font-semibold text-slate-700">О себе</span>
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={5} className="w-full rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-indigo-600" />
+              <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={5} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
             </label>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="text-sm" />
-              <button type="button" onClick={handleAvatarUpload} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+              <button type="button" onClick={handleAvatarUpload} className="rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
                 Загрузить аватар
               </button>
-              <button type="button" onClick={handleSaveProfile} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">
+              <button type="button" onClick={handleSaveProfile} className="rounded-xl border border-[#E1E4EA] px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">
                 Сохранить профиль
               </button>
             </div>
@@ -168,26 +168,26 @@ export const Profile = () => {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
-          <h2 className="text-xl font-bold text-slate-950">Объявления пользователя</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">{ads.length}</span>
+          <h2 className="text-xl font-bold text-[#1A1A1A]">Объявления пользователя</h2>
+          <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-sm text-[#8A8F99]">{ads.length}</span>
         </div>
 
         {ads.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-slate-500">У пользователя пока нет активных объявлений.</div>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-[#8A8F99]">У пользователя пока нет активных объявлений.</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {ads.map((item) => (
               <Link key={item.id} to={`/services/${item.id}`} className="group rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md">
                 <div className="flex gap-4">
-                  <div className="h-24 w-24 overflow-hidden rounded-xl bg-slate-100 flex-shrink-0">
+                  <div className="h-24 w-24 overflow-hidden rounded-xl bg-[#F2F3F5] flex-shrink-0">
                     {(item.image_url || item.images[0]?.url) ? (
                       <img src={fileUrl(item.images[0]?.url || item.image_url)} alt={item.title} className="h-full w-full object-cover" />
                     ) : null}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-semibold text-slate-950 group-hover:text-indigo-600">{item.title}</h3>
-                    <p className="mt-1 text-sm font-semibold text-indigo-600">{formatPrice(item)}</p>
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-500">{item.description}</p>
+                    <h3 className="truncate font-semibold text-[#1A1A1A] group-hover:text-[#2F6FED]">{item.title}</h3>
+                    <p className="mt-1 text-sm font-semibold text-[#2F6FED]">{formatPrice(item)}</p>
+                    <p className="mt-2 line-clamp-2 text-sm text-[#8A8F99]">{item.description}</p>
                   </div>
                 </div>
               </Link>
@@ -198,22 +198,22 @@ export const Profile = () => {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
-          <h2 className="text-xl font-bold text-slate-950">Отзывы</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">{reviews.length}</span>
+          <h2 className="text-xl font-bold text-[#1A1A1A]">Отзывы</h2>
+          <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-sm text-[#8A8F99]">{reviews.length}</span>
         </div>
 
         {reviews.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-slate-500">Пока нет отзывов.</div>
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-[#8A8F99]">Пока нет отзывов.</div>
         ) : (
           <div className="space-y-3">
             {reviews.map((review) => (
               <div key={review.id} className="rounded-2xl border bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-950">{review.author.display_name || review.author.username}</p>
-                    <p className="text-xs text-slate-500">@{review.author.username}</p>
+                    <p className="font-semibold text-[#1A1A1A]">{review.author.display_name || review.author.username}</p>
+                    <p className="text-xs text-[#8A8F99]">@{review.author.username}</p>
                   </div>
-                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700">{review.rating}/5</span>
+                  <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-sm font-semibold text-[#2F6FED]">{review.rating}/5</span>
                 </div>
                 {review.text && <p className="mt-3 text-sm text-slate-700">{review.text}</p>}
               </div>
@@ -223,15 +223,15 @@ export const Profile = () => {
 
         {!isOwnProfile && getToken() && targetUserId && (
           <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-bold text-slate-950">Оставить отзыв</h3>
+            <h3 className="mb-3 text-lg font-bold text-[#1A1A1A]">Оставить отзыв</h3>
             <div className="grid gap-3">
-              <select value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))} className="rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-indigo-600">
+              <select value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))} className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]">
                 {[5, 4, 3, 2, 1].map((rating) => (
                   <option key={rating} value={rating}>{rating} / 5</option>
                 ))}
               </select>
-              <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={4} placeholder="Ваш отзыв" className="rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-indigo-600" />
-              <button type="button" onClick={handleCreateReview} className="w-fit rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+              <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={4} placeholder="Ваш отзыв" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
+              <button type="button" onClick={handleCreateReview} className="w-fit rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
                 Отправить отзыв
               </button>
             </div>
