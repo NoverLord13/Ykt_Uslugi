@@ -22,9 +22,7 @@ function App() {
             <Route path="/register" element={<Register />}></Route>
             <Route path="/login" element={<Login />}></Route>
             <Route path="/adadder" element={<AdAdder />}></Route>
-            <Route path="/MyAds" element={<MyAds/>}></Route>
             <Route path="/my-ads" element={<MyAds/>}></Route>
-            <Route path="/Profile" element={<Profile/>}></Route>
             <Route path="/profile" element={<Profile/>}></Route>
             <Route path="/users/:id" element={<Profile/>}></Route>
             <Route path="/services/:id" element={<ServiceDetails />}></Route>
