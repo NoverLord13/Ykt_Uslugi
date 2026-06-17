@@ -1,223 +1,288 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { api, type AdBlock, type Tag } from '../api/Api';
+import {
+    api,
+    fileUrl,
+    formatPrice,
+    listingTypeLabel,
+    type AdBlock,
+    type Category,
+    type ServiceFilters,
+} from '../api/Api';
 import { getToken } from '../api/auth';
 
 type ServiceMode = 'all' | 'offer' | 'request';
+type SortMode = NonNullable<ServiceFilters['sort']>;
+
+const LIMIT = 12;
 
 export const Home = () => {
     const isAuthenticated = !!getToken();
     const navigate = useNavigate();
 
-    const [adBlock, setAdBlock] = useState<AdBlock[]>([]);
-    const [tags, setTags] = useState<Tag[]>([]);
-    const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+    const [ads, setAds] = useState<AdBlock[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [search, setSearch] = useState('');
     const [serviceMode, setServiceMode] = useState<ServiceMode>('all');
-    const [isLoading, setIsLoading] = useState(false);
+    const [categoryId, setCategoryId] = useState('');
+    const [subcategoryId, setSubcategoryId] = useState('');
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
+    const [sort, setSort] = useState<SortMode>('newest');
     const [skip, setSkip] = useState(0);
     const [hasMore, setHasMore] = useState(true);
-    const observerTarget = useRef<HTMLDivElement | null>(null);
-    const LIMIT = 12;
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const loadMoreArtworks = useCallback(async () => {
-        if (isLoading || !hasMore) return;
-
-        setIsLoading(true);
-        try {
-            const newData = await api.getAdBlock(skip, LIMIT);
-
-            if (newData.length < LIMIT) {
-                setHasMore(false);
-            }
-
-            setAdBlock((prev) => {
-                const combined = [...prev, ...newData];
-                return combined.filter((art, index, self) =>
-                    self.findIndex((t) => t.id === art.id) === index
-                );
-            });
-
-            setSkip((prev) => prev + LIMIT);
-        } catch (error) {
-            console.error('Ошибка при загрузке объявлений:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [skip, isLoading, hasMore]);
+    const selectedCategory = categories.find((category) => String(category.id) === categoryId);
 
     useEffect(() => {
-        api.getTags()
-            .then(setTags)
-            .catch((error) => console.error('Ошибка при загрузке тегов:', error));
+        api.getCategories()
+            .then(setCategories)
+            .catch((err) => {
+                console.error(err);
+                setError('Не удалось загрузить категории');
+            });
     }, []);
 
     useEffect(() => {
-        const target = observerTarget.current;
-        if (!target) return;
+        setSubcategoryId('');
+    }, [categoryId]);
 
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (entries[0].isIntersecting && hasMore && !isLoading) {
-                    loadMoreArtworks();
-                }
-            },
-            { threshold: 0.1 }
-        );
+    const buildFilters = (nextSkip: number): ServiceFilters => ({
+        skip: nextSkip,
+        limit: LIMIT,
+        q: search.trim() || undefined,
+        listing_type: serviceMode === 'all' ? undefined : serviceMode,
+        category_id: categoryId ? Number(categoryId) : undefined,
+        subcategory_id: subcategoryId ? Number(subcategoryId) : undefined,
+        min_price: minPrice || undefined,
+        max_price: maxPrice || undefined,
+        sort,
+    });
 
-        observer.observe(target);
+    const loadAds = async (nextSkip = 0, append = false) => {
+        setIsLoading(true);
+        setError('');
+        try {
+            const data = await api.getAdBlock(buildFilters(nextSkip));
+            setAds((prev) => append ? [...prev, ...data.filter((item) => !prev.some((old) => old.id === item.id))] : data);
+            setSkip(nextSkip + data.length);
+            setHasMore(data.length === LIMIT);
+        } catch (err) {
+            console.error(err);
+            setError('Не удалось загрузить объявления');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        return () => {
-            if (target) observer.unobserve(target);
-        };
-    }, [loadMoreArtworks, hasMore, isLoading]);
+    useEffect(() => {
+        loadAds(0, false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [serviceMode, categoryId, subcategoryId, minPrice, maxPrice, sort]);
 
-    const toggleTag = (tagId: number) => {
-        setSelectedTagIds((prev) =>
-            prev.includes(tagId)
-                ? prev.filter((id) => id !== tagId)
-                : [...prev, tagId]
-        );
+    const handleSearchSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        loadAds(0, false);
+    };
+
+    const clearFilters = () => {
+        setSearch('');
+        setServiceMode('all');
+        setCategoryId('');
+        setSubcategoryId('');
+        setMinPrice('');
+        setMaxPrice('');
+        setSort('newest');
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto text-slate-200 mt-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+        <div className="mx-auto max-w-7xl p-4 sm:p-6">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-4xl font-bold text-black mb-2">Uslugi Ykt</h1>
+                    <h1 className="text-4xl font-bold text-black">Uslugi Ykt</h1>
+                    <p className="mt-1 text-slate-500">Объявления услуг и запросов в Якутске</p>
                 </div>
 
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap gap-3">
                     {isAuthenticated && (
-                        <Button
-                            size="middle"
-                            color="primary"
-                            title="Мои объявления"
-                            onClick={() => navigate('/MyAds')}
-                        />
+                        <Button size="middle" color="primary" title="Мои объявления" onClick={() => navigate('/my-ads')} />
                     )}
-                    <Button
-                        size="middle"
-                        color="primary"
-                        title="Добавить объявление"
-                        onClick={() => navigate('/adadder')}
-                    />
+                    <Button size="middle" color="primary" title="Добавить объявление" onClick={() => navigate('/adadder')} />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-                <aside className="h-fit rounded-lg border border-slate-200 bg-white p-4 text-black shadow-sm lg:sticky lg:top-6">
-                    <div className="space-y-6">
-                        <section>
-                            <h2 className="text-base font-semibold text-slate-950">Фильтры</h2>
-                        </section>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+                <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 text-black shadow-sm lg:sticky lg:top-6">
+                    <form className="space-y-5" onSubmit={handleSearchSubmit}>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-950">Фильтры</h2>
+                        </div>
 
-                        <section>
-                            <h3 className="mb-3 text-sm font-semibold text-slate-700">Тип объявления</h3>
-                            <div className="space-y-2">
-                                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                                    <input
-                                        type="radio"
-                                        name="service-mode"
-                                        checked={serviceMode === 'all'}
-                                        onChange={() => setServiceMode('all')}
-                                        className="h-4 w-4 accent-indigo-600"
-                                    />
-                                    Оба сразу
-                                </label>
-                                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                                    <input
-                                        type="radio"
-                                        name="service-mode"
-                                        checked={serviceMode === 'offer'}
-                                        onChange={() => setServiceMode('offer')}
-                                        className="h-4 w-4 accent-indigo-600"
-                                    />
-                                    Оказание услуги
-                                </label>
-                                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                                    <input
-                                        type="radio"
-                                        name="service-mode"
-                                        checked={serviceMode === 'request'}
-                                        onChange={() => setServiceMode('request')}
-                                        className="h-4 w-4 accent-indigo-600"
-                                    />
-                                    Запрос услуги
-                                </label>
-                            </div>
-                        </section>
+                        <label className="block">
+                            <span className="mb-1 block text-sm font-semibold text-slate-700">Поиск</span>
+                            <input
+                                value={search}
+                                onChange={(event) => setSearch(event.target.value)}
+                                placeholder="Например: сантехник"
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                            />
+                        </label>
 
-                        <section>
-                            <h3 className="mb-3 text-sm font-semibold text-slate-700">Категории</h3>
-                            <div className="space-y-2">
-                                {tags.length > 0 ? (
-                                    tags.map((tag) => (
-                                        <label key={tag.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedTagIds.includes(tag.id)}
-                                                onChange={() => toggleTag(tag.id)}
-                                                className="h-4 w-4 rounded border-slate-300 accent-indigo-600"
-                                            />
-                                            {tag.name}
-                                        </label>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-slate-400">Категории появятся здесь</p>
-                                )}
+                        <div>
+                            <h3 className="mb-2 text-sm font-semibold text-slate-700">Тип объявления</h3>
+                            <div className="space-y-2 text-sm text-slate-700">
+                                {[
+                                    ['all', 'Все'],
+                                    ['offer', 'Оказание услуги'],
+                                    ['request', 'Запрос услуги'],
+                                ].map(([value, label]) => (
+                                    <label key={value} className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="service-mode"
+                                            checked={serviceMode === value}
+                                            onChange={() => setServiceMode(value as ServiceMode)}
+                                            className="h-4 w-4 accent-indigo-600"
+                                        />
+                                        {label}
+                                    </label>
+                                ))}
                             </div>
-                        </section>
+                        </div>
 
-                        <section>
-                            <h3 className="mb-3 text-sm font-semibold text-slate-700">Подкатегории</h3>
-                            <div className="space-y-2">
-                                <label className="flex items-center gap-2 text-sm text-slate-400">
-                                    <input type="checkbox" disabled className="h-4 w-4 rounded border-slate-300" />
-                                    Будут добавлены позже
-                                </label>
-                                <label className="flex items-center gap-2 text-sm text-slate-400">
-                                    <input type="checkbox" disabled className="h-4 w-4 rounded border-slate-300" />
-                                    Зависит от выбранной категории
-                                </label>
-                            </div>
-                        </section>
-                    </div>
+                        <label className="block">
+                            <span className="mb-1 block text-sm font-semibold text-slate-700">Категория</span>
+                            <select
+                                value={categoryId}
+                                onChange={(event) => setCategoryId(event.target.value)}
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                            >
+                                <option value="">Все категории</option>
+                                {categories.map((category) => (
+                                    <option key={category.id} value={category.id}>{category.name}</option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="block">
+                            <span className="mb-1 block text-sm font-semibold text-slate-700">Подкатегория</span>
+                            <select
+                                value={subcategoryId}
+                                onChange={(event) => setSubcategoryId(event.target.value)}
+                                disabled={!selectedCategory}
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none disabled:bg-slate-100 focus:border-indigo-600"
+                            >
+                                <option value="">Все подкатегории</option>
+                                {selectedCategory?.subcategories.map((subcategory) => (
+                                    <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className="block">
+                                <span className="mb-1 block text-sm font-semibold text-slate-700">Цена от</span>
+                                <input
+                                    type="number"
+                                    value={minPrice}
+                                    onChange={(event) => setMinPrice(event.target.value)}
+                                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="mb-1 block text-sm font-semibold text-slate-700">до</span>
+                                <input
+                                    type="number"
+                                    value={maxPrice}
+                                    onChange={(event) => setMaxPrice(event.target.value)}
+                                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                                />
+                            </label>
+                        </div>
+
+                        <label className="block">
+                            <span className="mb-1 block text-sm font-semibold text-slate-700">Сортировка</span>
+                            <select
+                                value={sort}
+                                onChange={(event) => setSort(event.target.value as SortMode)}
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-600"
+                            >
+                                <option value="newest">Сначала новые</option>
+                                <option value="oldest">Сначала старые</option>
+                                <option value="price_asc">Цена по возрастанию</option>
+                                <option value="price_desc">Цена по убыванию</option>
+                            </select>
+                        </label>
+
+                        <div className="flex gap-2">
+                            <button type="submit" className="flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+                                Найти
+                            </button>
+                            <button type="button" onClick={clearFilters} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                                Сброс
+                            </button>
+                        </div>
+                    </form>
                 </aside>
 
                 <main>
-                    {adBlock.length === 0 && !isLoading ? (
-                        <div className="text-center text-slate-500 py-20">Пока нет никаких объявлений</div>
+                    {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
+
+                    {ads.length === 0 && !isLoading ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center text-slate-500">
+                            Пока нет объявлений по выбранным фильтрам
+                        </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-                            {adBlock.map((ad) => (
-                                <div
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            {ads.map((ad) => (
+                                <article
                                     key={ad.id}
-                                    onClick={() => navigate(`/Home/${ad.id}`)}
-                                    className="group cursor-pointer overflow-hidden rounded-lg border border-indigo-500 bg-indigo-500 shadow-md transition-all duration-300 hover:-translate-y-1 hover:bg-indigo-600"
+                                    onClick={() => navigate(`/services/${ad.id}`)}
+                                    className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
                                 >
-                                    <div className="aspect-[4/3] overflow-hidden bg-black">
-                                        <img
-                                            src={`http://localhost:8000${ad.image_url}`}
-                                            alt={ad.title}
-                                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        />
+                                    <div className="aspect-[4/3] overflow-hidden bg-slate-100">
+                                        {(ad.image_url || ad.images[0]?.url) ? (
+                                            <img
+                                                src={fileUrl(ad.images[0]?.url || ad.image_url)}
+                                                alt={ad.title}
+                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                            />
+                                        ) : (
+                                            <div className="flex h-full items-center justify-center text-slate-400">Нет фото</div>
+                                        )}
                                     </div>
 
-                                    <div className="space-y-2 p-3">
-                                        <h3 className="truncate text-sm font-semibold text-white">{ad.title}</h3>
-                                        <span className="inline-flex rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-xs font-medium text-slate-300">
-                                            {ad.price} руб.
-                                        </span>
+                                    <div className="space-y-3 p-4">
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                                                {listingTypeLabel(ad.listing_type)}
+                                            </span>
+                                            {ad.category && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{ad.category.name}</span>}
+                                        </div>
+                                        <h3 className="line-clamp-2 min-h-12 font-bold text-slate-950">{ad.title}</h3>
+                                        <p className="text-lg font-bold text-indigo-600">{formatPrice(ad)}</p>
+                                        {ad.location && <p className="text-sm text-slate-500">{ad.location}</p>}
                                     </div>
-                                </div>
+                                </article>
                             ))}
                         </div>
                     )}
 
-                    <div ref={observerTarget} className="w-full text-center py-8 text-slate-500 text-sm">
-                        {isLoading && 'Загрузка новых объявлений...'}
-                        {!hasMore && adBlock.length > 0 && 'Вы просмотрели все объявления.'}
+                    <div className="py-8 text-center text-sm text-slate-500">
+                        {isLoading && 'Загрузка объявлений...'}
+                        {!isLoading && hasMore && ads.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => loadAds(skip, true)}
+                                className="rounded-xl border border-slate-200 bg-white px-5 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                                Показать еще
+                            </button>
+                        )}
+                        {!isLoading && !hasMore && ads.length > 0 && 'Вы просмотрели все объявления.'}
                     </div>
                 </main>
             </div>

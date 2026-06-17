@@ -22,6 +22,16 @@ export const Header = () => {
                 </li>
 
                 {isAuthenticated?(
+                    <>
+                    <li>
+                        <Link to="/adadder">Добавить</Link>
+                    </li>
+                    <li>
+                        <Link to="/my-ads">Мои объявления</Link>
+                    </li>
+                    <li>
+                        <Link to="/profile">Профиль</Link>
+                    </li>
                     <li>
                         <button 
                           onClick={handleLogout}
@@ -30,6 +40,7 @@ export const Header = () => {
                           Выйти
                         </button>
                     </li>
+                    </>
                 ):(
                   <>
                     <li>
