@@ -9,11 +9,6 @@ export interface ApiResponse<T> {
   data: T | null;
 }
 
-export interface Tag {
-  id: number;
-  name: string;
-}
-
 export interface Subcategory {
   id: number;
   category_id: number;
@@ -78,7 +73,6 @@ export interface AdBlock {
   images: ServiceImage[];
   is_active: boolean;
   owner: UserBrief;
-  tags: Tag[];
   created_at: string;
   updated_at: string;
 }
@@ -204,11 +198,6 @@ export const api = {
       headers: authHeaders(),
     });
     return response.data;
-  },
-
-  getTags: async (): Promise<Tag[]> => {
-    const response = await axios.get<ApiResponse<Tag[]>>(`${API_URL}/services/tags`);
-    return unwrap(response);
   },
 
   getCategories: async (): Promise<Category[]> => {

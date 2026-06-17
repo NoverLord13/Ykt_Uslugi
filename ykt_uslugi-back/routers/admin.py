@@ -53,7 +53,6 @@ def list_all_services(_: User = Depends(require_admin), db: Session = Depends(ge
             joinedload(Service.category).selectinload(Category.subcategories),
             joinedload(Service.subcategory),
             selectinload(Service.images),
-            selectinload(Service.tags),
         )
         .order_by(Service.created_at.desc())
         .all()

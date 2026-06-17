@@ -1,32 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Column, ForeignKey, Numeric, String, Table, Text, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
-
-service_tag_association = Table(
-    "service_tag_association",
-    Base.metadata,
-    Column("service_id", ForeignKey("services.id", ondelete="CASCADE"), primary_key=True),
-    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
-)
-
-
-class Tag(Base):
-    __tablename__ = "tags"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-
-
-    services: Mapped[list["Service"]] = relationship(
-        "Service", 
-        secondary=service_tag_association, 
-        back_populates="tags"
-    )
-
 
 class Category(Base):
     __tablename__ = "categories"
@@ -87,12 +65,6 @@ class Service(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
-
-    tags: Mapped[list["Tag"]] = relationship(
-        "Tag", 
-        secondary=service_tag_association, 
-        back_populates="services"
-    )
 
     category: Mapped[Category | None] = relationship("Category")
     subcategory: Mapped[Subcategory | None] = relationship("Subcategory")

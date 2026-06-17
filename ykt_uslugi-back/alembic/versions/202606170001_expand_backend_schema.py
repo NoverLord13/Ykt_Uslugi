@@ -32,6 +32,27 @@ def _index_exists(table_name: str, index_name: str) -> bool:
 
 
 def upgrade() -> None:
+    if not _table_exists("users"):
+        op.create_table(
+            "users",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("username", sa.String(length=50), nullable=False),
+            sa.Column("phone_number", sa.String(length=20), nullable=False),
+            sa.Column("hashed_password", sa.String(length=255), nullable=False),
+            sa.Column("display_name", sa.String(length=100), nullable=True),
+            sa.Column("bio", sa.Text(), nullable=True),
+            sa.Column("avatar_url", sa.String(length=500), nullable=True),
+            sa.Column("location", sa.String(length=200), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False),
+            sa.Column("is_admin", sa.Boolean(), nullable=False),
+            sa.Column("created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    if not _index_exists("users", "ix_users_username"):
+        op.create_index(op.f("ix_users_username"), "users", ["username"], unique=True)
+    if not _index_exists("users", "ix_users_phone_number"):
+        op.create_index(op.f("ix_users_phone_number"), "users", ["phone_number"], unique=True)
+
     if not _table_exists("categories"):
         op.create_table(
             "categories",
@@ -65,32 +86,60 @@ def upgrade() -> None:
     if not _index_exists("subcategories", "ix_subcategories_slug"):
         op.create_index(op.f("ix_subcategories_slug"), "subcategories", ["slug"], unique=False)
 
-    with op.batch_alter_table("users") as batch_op:
-        if not _column_exists("users", "display_name"):
-            batch_op.add_column(sa.Column("display_name", sa.String(length=100), nullable=True))
-        if not _column_exists("users", "bio"):
-            batch_op.add_column(sa.Column("bio", sa.Text(), nullable=True))
-        if not _column_exists("users", "avatar_url"):
-            batch_op.add_column(sa.Column("avatar_url", sa.String(length=500), nullable=True))
-        if not _column_exists("users", "location"):
-            batch_op.add_column(sa.Column("location", sa.String(length=200), nullable=True))
+    if _table_exists("users"):
+        with op.batch_alter_table("users") as batch_op:
+            if not _column_exists("users", "display_name"):
+                batch_op.add_column(sa.Column("display_name", sa.String(length=100), nullable=True))
+            if not _column_exists("users", "bio"):
+                batch_op.add_column(sa.Column("bio", sa.Text(), nullable=True))
+            if not _column_exists("users", "avatar_url"):
+                batch_op.add_column(sa.Column("avatar_url", sa.String(length=500), nullable=True))
+            if not _column_exists("users", "location"):
+                batch_op.add_column(sa.Column("location", sa.String(length=200), nullable=True))
 
-    with op.batch_alter_table("services") as batch_op:
-        if not _column_exists("services", "listing_type"):
-            batch_op.add_column(sa.Column("listing_type", sa.String(length=20), nullable=False, server_default="offer"))
-        if not _column_exists("services", "category_id"):
-            batch_op.add_column(sa.Column("category_id", sa.Integer(), nullable=True))
-        if not _column_exists("services", "subcategory_id"):
-            batch_op.add_column(sa.Column("subcategory_id", sa.Integer(), nullable=True))
-        if not _column_exists("services", "location"):
-            batch_op.add_column(sa.Column("location", sa.String(length=200), nullable=True))
-        if not _column_exists("services", "price_type"):
-            batch_op.add_column(sa.Column("price_type", sa.String(length=20), nullable=False, server_default="fixed"))
-        if not _column_exists("services", "status"):
-            batch_op.add_column(sa.Column("status", sa.String(length=20), nullable=False, server_default="active"))
-        if not _column_exists("services", "contact_phone"):
-            batch_op.add_column(sa.Column("contact_phone", sa.String(length=20), nullable=True))
+    if not _table_exists("services"):
+        op.create_table(
+            "services",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("owner_id", sa.Integer(), nullable=False),
+            sa.Column("title", sa.String(length=200), nullable=False),
+            sa.Column("description", sa.Text(), nullable=False),
+            sa.Column("price", sa.Numeric(10, 2), nullable=False),
+            sa.Column("listing_type", sa.String(length=20), nullable=False, server_default="offer"),
+            sa.Column("category_id", sa.Integer(), nullable=True),
+            sa.Column("subcategory_id", sa.Integer(), nullable=True),
+            sa.Column("location", sa.String(length=200), nullable=True),
+            sa.Column("price_type", sa.String(length=20), nullable=False, server_default="fixed"),
+            sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+            sa.Column("contact_phone", sa.String(length=20), nullable=True),
+            sa.Column("image_url", sa.String(length=500), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False),
+            sa.Column("created_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.ForeignKeyConstraint(["owner_id"], ["users.id"]),
+            sa.ForeignKeyConstraint(["category_id"], ["categories.id"]),
+            sa.ForeignKeyConstraint(["subcategory_id"], ["subcategories.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    else:
+        with op.batch_alter_table("services") as batch_op:
+            if not _column_exists("services", "listing_type"):
+                batch_op.add_column(sa.Column("listing_type", sa.String(length=20), nullable=False, server_default="offer"))
+            if not _column_exists("services", "category_id"):
+                batch_op.add_column(sa.Column("category_id", sa.Integer(), nullable=True))
+            if not _column_exists("services", "subcategory_id"):
+                batch_op.add_column(sa.Column("subcategory_id", sa.Integer(), nullable=True))
+            if not _column_exists("services", "location"):
+                batch_op.add_column(sa.Column("location", sa.String(length=200), nullable=True))
+            if not _column_exists("services", "price_type"):
+                batch_op.add_column(sa.Column("price_type", sa.String(length=20), nullable=False, server_default="fixed"))
+            if not _column_exists("services", "status"):
+                batch_op.add_column(sa.Column("status", sa.String(length=20), nullable=False, server_default="active"))
+            if not _column_exists("services", "contact_phone"):
+                batch_op.add_column(sa.Column("contact_phone", sa.String(length=20), nullable=True))
 
+    if not _index_exists("services", "ix_services_owner_id"):
+        op.create_index(op.f("ix_services_owner_id"), "services", ["owner_id"], unique=False)
     if not _index_exists("services", "ix_services_listing_type"):
         op.create_index(op.f("ix_services_listing_type"), "services", ["listing_type"], unique=False)
     if not _index_exists("services", "ix_services_category_id"):

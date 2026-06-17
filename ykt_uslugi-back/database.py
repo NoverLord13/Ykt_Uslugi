@@ -21,27 +21,6 @@ def get_db() -> Generator:
     finally:
         db.close()
 
-def seed_tags():
-
-    INITIAL_TAGS = ["IT", "Дизайн", "Ремонт", "Маркетинг", "Копирайтинг", "Обучение", "Разнорабочий"]
-    from models.service import Tag
-    
-    db = SessionLocal()
-    try:
-        for tag_name in INITIAL_TAGS:
-            # Проверяем, существует ли уже такой тег в базе
-            exists = db.query(Tag).filter(Tag.name == tag_name).first()
-            if not exists:
-                new_tag = Tag(name=tag_name)
-                db.add(new_tag)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Ошибка при наполнении тегов: {e}")
-    finally:
-        db.close()
-
-
 def seed_categories():
     initial_categories = {
         "Ремонт": ["Сантехника", "Электрика", "Бытовая техника", "Отделка"],
@@ -54,6 +33,7 @@ def seed_categories():
         "Разное": ["Помощь по дому", "Мероприятия", "Животные", "Другое"],
     }
 
+    from models import review, user  # noqa: F401
     from models.service import Category, Subcategory
 
     def slugify(value: str) -> str:

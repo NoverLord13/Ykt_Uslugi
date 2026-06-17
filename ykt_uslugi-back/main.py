@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import UPLOAD_DIR
-from database import seed_categories, seed_tags
+from database import seed_categories
 from models import review, service, user
 from routers import admin, auth, categories, services, users
 
@@ -18,7 +18,6 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Код здесь выполняется ДО того, как приложение начнет принимать запросы
-    seed_tags()  # Наполняем базу тегами
     seed_categories()
     yield
     # Код здесь выполнится при выключении сервера (если нужно)

@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from database import get_db
 from dependencies import get_current_user
-from models.service import Category, Service, ServiceImage, Subcategory, Tag
+from models.service import Category, Service, ServiceImage, Subcategory
 from models.user import User
-from schemas.common import ApiResponse, ServiceRead, TagRead
+from schemas.common import ApiResponse, ServiceRead
 from schemas.service import ServiceUpdate
 from services.files import save_upload
 
@@ -26,7 +26,6 @@ def _service_load_options():
         joinedload(Service.category).selectinload(Category.subcategories),
         joinedload(Service.subcategory),
         selectinload(Service.images),
-        selectinload(Service.tags),
     )
 
 
@@ -108,13 +107,6 @@ def list_my_services(current_user: User = Depends(get_current_user), db: Session
         data=[_to_service_read(s) for s in services],
     )
 
-@router.get("/tags", response_model=ApiResponse[list[TagRead]])
-def get_all_tags(db: Session = Depends(get_db)):
-    tags = db.query(Tag).all()
-    # Форматируем список через Pydantic
-    tags_data = [TagRead(id=t.id, name=t.name) for t in tags]
-    return ApiResponse(message="Список тегов получен", data=tags_data)
-
 @router.get("/{service_id}", response_model=ApiResponse[ServiceRead])
 def get_service(service_id: int, db: Session = Depends(get_db)):
     service = (
@@ -141,15 +133,10 @@ async def create_service(
     contact_phone: str | None = Form(None, max_length=20),
     image: UploadFile | None = File(None),
     images: list[UploadFile] | None = File(None),
-    tag_ids: list[int] = Form([]),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _validate_category_pair(db, category_id, subcategory_id)
-
-    selected_tags = []
-    if tag_ids:
-        selected_tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
 
     upload_files = [file for file in (images or []) if file and file.filename]
     if image and image.filename:
@@ -172,7 +159,6 @@ async def create_service(
         price_type=price_type,
         contact_phone=contact_phone,
         image_url=image_url,
-        tags=selected_tags,
         images=[ServiceImage(url=url, position=index) for index, url in enumerate(image_urls)],
     )
     db.add(service)
@@ -204,7 +190,6 @@ async def update_service(
     contact_phone: str | None = Form(None),
     image: UploadFile | None = File(None),
     images: list[UploadFile] | None = File(None),
-    tag_ids: list[int] | None = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -237,9 +222,6 @@ async def update_service(
         service.is_active = status_value == "active"
     if contact_phone is not None:
         service.contact_phone = contact_phone
-    if tag_ids is not None:
-        service.tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all() if tag_ids else []
-
     upload_files = [file for file in (images or []) if file and file.filename]
     if image and image.filename:
         upload_files.insert(0, image)
@@ -305,4 +287,3 @@ def delete_service(
     db.delete(service)
     db.commit()
     return ApiResponse(message="Услуга удалена")
-

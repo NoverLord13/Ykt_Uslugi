@@ -47,13 +47,6 @@ class VerificationTokenData(BaseModel):
     verification_token: str
 
 
-class TagRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-
-
 class SubcategoryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -115,6 +108,5 @@ class ServiceRead(BaseModel):
     is_active: bool
     owner: UserBrief
     images: list[ServiceImageRead] = Field(default_factory=list)
-    tags: list[TagRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
