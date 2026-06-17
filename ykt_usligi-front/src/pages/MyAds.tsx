@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type AdBlock } from "../api/Api";
+import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock } from "../api/Api";
 import { getToken } from "../api/auth";
 
 export const MyAds = () => {
@@ -25,7 +25,7 @@ export const MyAds = () => {
                 setAds(data);
             } catch (error) {
                 console.error(error);
-                setError("Не удалось загрузить ваши объявления");
+                setError(getApiErrorMessage(error, "Не удалось загрузить ваши объявления"));
             } finally {
                 setIsLoading(false);
             }
@@ -43,7 +43,7 @@ export const MyAds = () => {
             setAds((prev) => prev.filter((ad) => ad.id !== id));
         } catch (error) {
             console.error(error);
-            alert("Не удалось удалить объявление");
+            alert(getApiErrorMessage(error, "Не удалось удалить объявление"));
         }
     };
 
@@ -52,11 +52,11 @@ export const MyAds = () => {
             <div className="p-6 max-w-7xl mx-auto">
                 <div className="rounded-2xl bg-white p-6 shadow-2xl border border-black">
                     <h2 className="mb-3 text-2xl font-bold text-black">Мои объявления</h2>
-                    <p className="mb-4 text-slate-500">Войдите в аккаунт, чтобы увидеть свои объявления.</p>
+                    <p className="mb-4 text-[#8A8F99]">Войдите в аккаунт, чтобы увидеть свои объявления.</p>
                     <button
                         type="button"
                         onClick={() => navigate("/login")}
-                        className="cursor-pointer rounded-[14px] bg-indigo-600 px-5 py-2.5 font-medium text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500"
+                        className="cursor-pointer rounded-[14px] bg-[#2F6FED] px-5 py-2.5 font-medium text-white shadow-lg shadow-[#2F6FED]/20 hover:bg-[#245DCC]"
                     >
                         Войти
                     </button>
@@ -72,14 +72,14 @@ export const MyAds = () => {
                 <button
                     type="button"
                     onClick={() => navigate("/adadder")}
-                    className="cursor-pointer rounded-[14px] bg-indigo-600 px-5 py-2.5 font-medium text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500"
+                    className="cursor-pointer rounded-[14px] bg-[#2F6FED] px-5 py-2.5 font-medium text-white shadow-lg shadow-[#2F6FED]/20 hover:bg-[#245DCC]"
                 >
                     Добавить объявление
                 </button>
             </div>
 
             {isLoading && (
-                <div className="py-20 text-center text-slate-500">Загрузка объявлений...</div>
+                <div className="py-20 text-center text-[#8A8F99]">Загрузка объявлений...</div>
             )}
 
             {!isLoading && error && (
@@ -87,7 +87,7 @@ export const MyAds = () => {
             )}
 
             {!isLoading && !error && ads.length === 0 && (
-                <div className="py-20 text-center text-slate-500">У вас пока нет объявлений</div>
+                <div className="py-20 text-center text-[#8A8F99]">У вас пока нет объявлений</div>
             )}
 
             {!isLoading && !error && ads.length > 0 && (
@@ -95,27 +95,50 @@ export const MyAds = () => {
                     {ads.map((ad) => (
                         <div
                             key={ad.id}
-                            className="overflow-hidden rounded-2xl border bg-indigo-500 shadow-lg"
+                            className="overflow-hidden rounded-2xl border bg-white shadow-sm"
                         >
-                            <div className="aspect-square overflow-hidden bg-black">
-                                <img
-                                    src={`http://localhost:8000${ad.image_url}`}
-                                    alt={ad.title}
-                                    className="h-full w-full object-cover"
-                                />
+                            <div
+                                onClick={() => navigate(`/services/${ad.id}`)}
+                                className="aspect-square cursor-pointer overflow-hidden bg-[#F2F3F5]"
+                            >
+                                {(ad.image_url || ad.images[0]?.url) ? (
+                                    <img
+                                        src={fileUrl(ad.images[0]?.url || ad.image_url)}
+                                        alt={ad.title}
+                                        className="h-full w-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="flex h-full items-center justify-center text-slate-400">Нет фото</div>
+                                )}
                             </div>
 
                             <div className="p-4">
-                                <h3 className="truncate text-lg font-bold text-white">{ad.title}</h3>
-                                <p className="mt-1 line-clamp-2 text-xs text-white">
+                                <div className="mb-2 flex flex-wrap gap-2">
+                                    <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-xs font-semibold text-[#2F6FED]">
+                                        {listingTypeLabel(ad.listing_type)}
+                                    </span>
+                                    <span className="rounded-full bg-[#F2F3F5] px-2 py-1 text-xs text-slate-600">
+                                        {ad.status}
+                                    </span>
+                                </div>
+                                <h3 className="truncate text-lg font-bold text-[#1A1A1A]">{ad.title}</h3>
+                                <p className="mt-1 line-clamp-2 text-xs text-[#8A8F99]">
                                     {ad.description || "Нет описания"}
                                 </p>
+                                {ad.category && <p className="mt-2 text-xs text-slate-400">{ad.category.name}</p>}
                             </div>
 
-                            <div className="flex items-center justify-between gap-3 border-t border-slate-800/60 bg-slate-900/50 p-4">
-                                <span className="rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-xs font-medium text-slate-300">
-                                    {ad.price} руб.
+                            <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-[#F2F3F5] p-4">
+                                <span className="rounded-md border border-[#E1E4EA] bg-white px-2 py-1 text-xs font-semibold text-[#2F6FED]">
+                                    {formatPrice(ad)}
                                 </span>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/services/${ad.id}/edit`)}
+                                    className="cursor-pointer rounded-md bg-[#2F6FED] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#245DCC]"
+                                >
+                                    Изменить
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => handleDelete(ad.id, ad.title)}

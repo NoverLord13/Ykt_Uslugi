@@ -1,6 +1,40 @@
 @import "tailwindcss";
 
-header{
-  margin: 0;
+@theme {
+  --font-sans: Roboto, Arial, Verdana, sans-serif;
 }
 
+:root {
+  --color-brand: #2F6FED;
+  --color-graphite: #1A1A1A;
+  --color-page: #F2F3F5;
+  --color-muted: #8A8F99;
+  --color-card: #FFFFFF;
+  --color-red-accent: #E8352B;
+  --color-purple-accent: #7B4DE3;
+  --color-yellow-accent: #F2C500;
+  --color-orange-accent: #F26722;
+  --color-gold-accent: #E8A33D;
+}
+
+html {
+  background: var(--color-page);
+}
+
+body {
+  margin: 0;
+  background: var(--color-page);
+  color: var(--color-graphite);
+  font-family: Roboto, Arial, Verdana, sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

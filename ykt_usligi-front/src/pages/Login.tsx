@@ -11,6 +11,7 @@ import {
   sendLoginCode,
   verifyLoginCode
 } from "../api/auth";
+import { getApiErrorMessage } from '../api/Api';
 
 type Step = "phone" | "code";
 
@@ -34,7 +35,7 @@ export const Login = () => {
         await sendLoginCode(phone);
         setStep("code");
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Не удалось отправить код");
+        setError(getApiErrorMessage(e, e instanceof ApiError ? e.message : "Не удалось отправить код"));
       } finally {
         setLoading(false);
       }
@@ -49,10 +50,10 @@ export const Login = () => {
         throw new Error("Токен не получен");
       }
       saveToken(response.data.access_token);
+      window.dispatchEvent(new Event('auth-change'));
       navigate("/");
-      window.location.reload();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Неверный код");
+      setError(getApiErrorMessage(e, e instanceof ApiError ? e.message : "Неверный код"));
     } finally {
       setLoading(false);
     }
@@ -74,13 +75,13 @@ export const Login = () => {
       }
       
       saveToken(data.data.access_token);
+      window.dispatchEvent(new Event('auth-change'));
 
       navigate('/');
-      window.location.reload(); 
       
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Неверный логин или пароль');
+      setError(getApiErrorMessage(err, 'Неверный логин или пароль'));
     }
   };
 
@@ -170,7 +171,7 @@ export const Login = () => {
                       placeholder="+7 999 123-45-67"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-black"
+                      className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
                     />
                     <Button
                       size="middle"
@@ -189,7 +190,7 @@ export const Login = () => {
                       maxLength={4}
                       value={code}
                       onChange={(e) => setCode(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-black"
+                      className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
                     />
                     <Button
                       size="middle"
@@ -201,7 +202,7 @@ export const Login = () => {
                     <button
                       type="button"
                       onClick={() => setStep("phone")}
-                      className="text-sm text-indigo-600 hover:underline"
+                      className="text-sm text-[#2F6FED] hover:underline"
                     >
                       Изменить номер
                     </button>
