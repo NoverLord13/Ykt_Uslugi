@@ -28,6 +28,16 @@ export const AdAdder = () => {
         console.error(err);
         setError(getApiErrorMessage(err, 'Не удалось загрузить категории'));
       });
+
+    api.getMe()
+      .then((user) => {
+        if (user.phone_number) {
+          setContactPhone(user.phone_number);
+        }
+      })
+      .catch((err) => {
+        console.error('Не удалось загрузить профиль для получения номера телефона', err);
+      });
   }, []);
 
   useEffect(() => {
@@ -186,10 +196,11 @@ export const AdAdder = () => {
             <input
               type="tel"
               value={contactPhone}
-              onChange={(event) => setContactPhone(event.target.value)}
-              placeholder="+7 999 123-45-67"
-              className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
+              disabled
+              readOnly
+              className="w-full rounded-xl border border-[#E1E4EA] bg-[#F2F3F5] px-3 py-2 text-[#8A8F99] outline-none cursor-not-allowed"
             />
+            <span className="mt-1 block text-xs text-[#8A8F99]">Номер телефона привязан к вашему профилю и не может быть изменен.</span>
           </label>
 
           <label className="block">

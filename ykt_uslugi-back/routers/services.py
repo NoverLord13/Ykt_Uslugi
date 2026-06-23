@@ -157,7 +157,7 @@ async def create_service(
         subcategory_id=subcategory_id,
         location=location,
         price_type=price_type,
-        contact_phone=contact_phone,
+        contact_phone=current_user.phone_number,
         image_url=image_url,
         images=[ServiceImage(url=url, position=index) for index, url in enumerate(image_urls)],
     )
@@ -220,8 +220,7 @@ async def update_service(
     if status_value is not None:
         service.status = status_value
         service.is_active = status_value == "active"
-    if contact_phone is not None:
-        service.contact_phone = contact_phone
+    service.contact_phone = current_user.phone_number
     upload_files = [file for file in (images or []) if file and file.filename]
     if image and image.filename:
         upload_files.insert(0, image)

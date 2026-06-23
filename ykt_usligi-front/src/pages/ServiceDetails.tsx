@@ -10,6 +10,7 @@ export const ServiceDetails = () => {
   const [activeImage, setActiveImage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showPhone, setShowPhone] = useState(false);
 
   useEffect(() => {
     const serviceId = Number(id);
@@ -94,8 +95,49 @@ export const ServiceDetails = () => {
           <h1 className="text-2xl font-bold text-[#1A1A1A]">{ad.title}</h1>
           <p className="mt-3 text-2xl font-bold text-[#2F6FED]">{formatPrice(ad)}</p>
 
-          {ad.location && <p className="mt-3 text-sm text-[#8A8F99]">Локация: {ad.location}</p>}
-          {ad.contact_phone && <p className="mt-2 text-sm text-[#8A8F99]">Телефон: {ad.contact_phone}</p>}
+          {ad.location && <p className="mt-3 text-sm text-[#8A8F99]"><span className="font-semibold text-slate-700">Локация:</span> {ad.location}</p>}
+          
+          {ad.contact_phone && (
+            <div className="mt-4 space-y-3 border-t border-[#E1E4EA] pt-4">
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#8A8F99]">Контакты</span>
+                {showPhone ? (
+                  <a
+                    href={`tel:${ad.contact_phone}`}
+                    className="inline-flex items-center justify-center rounded-xl border border-[#E1E4EA] bg-[#F2F3F5] px-4 py-2.5 font-bold text-[#1A1A1A] hover:bg-slate-100 transition-colors"
+                  >
+                    {ad.contact_phone}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowPhone(true)}
+                    className="cursor-pointer w-full rounded-xl bg-[#2F6FED] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#245DCC] transition-colors text-center"
+                  >
+                    Показать номер
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => alert(`Открыть чат WhatsApp: ${ad.contact_phone}`)}
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-3 py-2 text-xs font-semibold text-white hover:bg-[#20ba5a] transition-colors"
+                >
+                  Написать в WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => alert(`Открыть чат Telegram: ${ad.contact_phone}`)}
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-[#0088cc] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0077b3] transition-colors"
+                >
+                  Написать в Telegram
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-5 border-t pt-5">
             <p className="mb-2 text-sm font-semibold text-slate-700">Автор</p>

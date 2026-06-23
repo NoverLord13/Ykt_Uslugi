@@ -176,7 +176,17 @@ export const AdEditor = () => {
             </select>
           </div>
 
-          <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Контактный телефон" className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-[#1A1A1A]">Контактный телефон</span>
+            <input
+              type="tel"
+              value={contactPhone}
+              disabled
+              readOnly
+              className="w-full rounded-xl border border-[#E1E4EA] bg-[#F2F3F5] px-3 py-2 text-[#8A8F99] outline-none cursor-not-allowed"
+            />
+            <span className="mt-1 block text-xs text-[#8A8F99]">Номер телефона привязан к профилю создателя и не может быть изменен.</span>
+          </label>
 
           {existingImages.length > 0 && files.length === 0 && (
             <div>
