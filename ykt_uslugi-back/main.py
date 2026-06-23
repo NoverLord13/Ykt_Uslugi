@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import UPLOAD_DIR
-from database import seed_categories
+from database import Base, engine, seed_categories  # <--- Добавили импорт Base и engine
 from models import review, service, user
 from routers import admin, auth, categories, services, users
 
@@ -17,10 +17,12 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 # Контекстный менеджер, который срабатывает строго ОДИН раз при запуске сервера
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Код здесь выполняется ДО того, как приложение начнет принимать запросы
+    # Автоматически создаем все таблицы в SQLite, если их еще нет в файле БД
+    Base.metadata.create_all(bind=engine)
+    
+    # Теперь таблицы гарантированно существуют, наполнение сработает без ошибок
     seed_categories()
     yield
-    # Код здесь выполнится при выключении сервера (если нужно)
 
 
 # Передаем lifespan в конструктор приложения
