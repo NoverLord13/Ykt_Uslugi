@@ -114,30 +114,31 @@ export const Home = () => {
     };
 
     return (
-        <div className="mx-auto max-w-7xl p-4 sm:p-6">
-            <section className="relative mb-8 overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-br from-white via-[#F5F8FF] to-[#E8F0FF] px-5 py-8 shadow-sm sm:px-8 sm:py-10">
-                <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#2F6FED]/10 blur-2xl" />
+        <div className="mx-auto max-w-7xl p-4 pb-16 sm:p-6">
+            <section className="relative mb-8 overflow-hidden rounded-[32px] border border-purple-100 bg-gradient-to-br from-white via-[#f7f2ff] to-[#fff0ea] px-5 py-10 shadow-[0_22px_70px_rgb(80_50_130/0.10)] sm:px-10 sm:py-14">
+                <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[var(--accent)]/15 blur-3xl" />
                 <div className="relative max-w-3xl">
-                    <h1 className="mt-4 text-3xl font-black leading-tight text-[#1A1A1A] sm:text-5xl">Найдите специалиста<br className="hidden sm:block" /> или предложите свою услугу</h1>
-                    <p className="mt-3 max-w-2xl text-sm leading-6 text-[#667085] sm:text-base">Объявления от местных исполнителей и заказчиков — без лишних посредников.</p>
+                    <p className="eyebrow">Люди помогают людям</p>
+                    <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-[-.045em] text-[var(--ink)] sm:text-6xl">Нужный человек<br className="hidden sm:block" /> найдётся рядом</h1>
+                    <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-lg">Проверенные сделки, живые профили и местные специалисты — чтобы от задачи до результата было меньше лишних шагов.</p>
 
-                    <form onSubmit={handleSearchSubmit} className="mt-6 flex max-w-2xl flex-col gap-2 rounded-2xl border border-white bg-white/90 p-2 shadow-lg shadow-blue-100 sm:flex-row">
+                    <form onSubmit={handleSearchSubmit} className="mt-7 flex max-w-2xl flex-col gap-2 rounded-2xl border border-white bg-white/95 p-2 shadow-xl shadow-purple-100/70 sm:flex-row">
                         <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
                             <span className="text-lg text-[#8A8F99]">⌕</span>
                             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Какую услугу вы ищете?" className="min-h-11 w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
                         </label>
-                        <button type="submit" className="rounded-xl bg-[#2F6FED] px-6 py-3 text-sm font-bold text-white transition hover:bg-[#245DCC]">Найти</button>
+                        <button type="submit" className="button-primary px-7">Найти</button>
                     </form>
 
                     <div className="mt-5 flex flex-wrap gap-3">
-                        <button type="button" onClick={handleAddService} className="rounded-xl bg-[#1A1A1A] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">+ Добавить объявление</button>
-                        {isAuthenticated && <button type="button" onClick={() => navigate('/my-ads')} className="rounded-xl border border-[#D7E2FA] bg-white/80 px-5 py-2.5 text-sm font-semibold text-[#2F6FED] hover:bg-white">Мои объявления</button>}
+                        <button type="button" onClick={handleAddService} className="button-secondary">＋ Добавить объявление</button>
+                        {isAuthenticated && <button type="button" onClick={() => navigate('/my-ads')} className="button-quiet">Мои объявления →</button>}
                     </div>
                 </div>
             </section>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-                <aside className="h-fit rounded-2xl border border-[#E1E4EA] bg-white p-5 text-black shadow-sm lg:sticky lg:top-24">
+                <aside className="surface h-fit p-5 text-black lg:sticky lg:top-24">
                     <form className="space-y-5" onSubmit={handleSearchSubmit}>
                         <div className="flex items-center justify-between">
                             <div><h2 className="text-lg font-bold text-[#1A1A1A]">Фильтры</h2><p className="text-xs text-[#8A8F99]">Уточните результаты</p></div>
@@ -258,7 +259,7 @@ export const Home = () => {
                                 <article
                                     key={ad.id}
                                     onClick={() => navigate(`/services/${ad.id}`)}
-                                    className="group cursor-pointer overflow-hidden rounded-2xl border border-[#E1E4EA] bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-100/70"
+                                    className="group cursor-pointer overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_10px_35px_rgb(55_38_91/0.06)] transition duration-300 hover:-translate-y-1 hover:border-purple-200 hover:shadow-[0_20px_55px_rgb(75_45_120/0.14)]"
                                 >
                                     <div className="aspect-[4/3] overflow-hidden bg-[#F2F3F5]">
                                         {(ad.image_url || ad.images[0]?.url) ? (

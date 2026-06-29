@@ -10,7 +10,7 @@ class ResponseCreate(BaseModel):
 
 
 class ResponseUpdate(BaseModel):
-    status: str = Field(..., pattern=r"^(accepted|completed|cancelled)$")
+    status: str = Field(..., pattern=r"^(accepted|completed|cancelled|declined)$")
 
 
 class ResponseServiceRead(BaseModel):
@@ -18,6 +18,7 @@ class ResponseServiceRead(BaseModel):
 
     id: int
     title: str
+    listing_type: str
     owner: UserBrief
 
 
@@ -31,12 +32,18 @@ class ResponseRead(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    can_accept: bool = False
+    can_complete: bool = False
+    can_cancel: bool = False
+    can_review: bool = False
+    review_left: bool = False
 
 
 class ReportCreate(BaseModel):
     target_type: str = Field(..., pattern=r"^(service|user|review)$")
     target_id: int = Field(..., ge=1)
-    reason: str = Field(..., min_length=10, max_length=2000)
+    reason: str = Field(..., pattern=r"^(spam|fraud|abuse|illegal|wrong_info|other)$")
+    comment: str | None = Field(None, max_length=1500)
 
 
 class ReportUpdate(BaseModel):
@@ -51,6 +58,7 @@ class ReportRead(BaseModel):
     target_type: str
     target_id: int
     reason: str
+    comment: str | None = None
     status: str
     created_at: datetime
     updated_at: datetime

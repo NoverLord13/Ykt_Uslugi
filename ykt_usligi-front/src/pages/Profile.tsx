@@ -2,223 +2,43 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, fileUrl, formatPrice, getApiErrorMessage, type AdBlock, type Review, type UserProfile } from '../api/Api';
 import { getToken } from '../api/auth';
+import { ReportModal } from '../components/FeedbackModals';
 
 export const Profile = () => {
-  const { id } = useParams();
-  const isOwnProfile = !id;
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [ads, setAds] = useState<AdBlock[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [displayName, setDisplayName] = useState('');
-  const [bio, setBio] = useState('');
-  const [location, setLocation] = useState('');
-  const [telegramUsername, setTelegramUsername] = useState('');
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const { id } = useParams(); const isOwn = !id; const targetId = id ? Number(id) : null;
+  const [profile, setProfile] = useState<UserProfile | null>(null); const [ads, setAds] = useState<AdBlock[]>([]); const [reviews, setReviews] = useState<Review[]>([]);
+  const [displayName, setDisplayName] = useState(''); const [bio, setBio] = useState(''); const [location, setLocation] = useState(''); const [telegram, setTelegram] = useState(''); const [avatar, setAvatar] = useState<File | null>(null);
+  const [editing, setEditing] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
+  const [report, setReport] = useState<{ type: 'user' | 'review'; id: number } | null>(null);
 
-  const targetUserId = id ? Number(id) : null;
-  const canEdit = isOwnProfile && !!getToken();
+  const load = async () => { if (!isOwn && (!targetId || Number.isNaN(targetId))) { setError('Некорректный профиль'); setLoading(false); return; } setLoading(true); setError(''); try { const data = isOwn ? await api.getMe() : await api.getUserProfile(targetId!); setProfile(data); setDisplayName(data.display_name || ''); setBio(data.bio || ''); setLocation(data.location || ''); setTelegram(data.telegram_username || ''); const [userAds, userReviews] = await Promise.all([api.getUserServices(data.id), api.getUserReviews(data.id)]); setAds(userAds); setReviews(userReviews); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось загрузить профиль')); } finally { setLoading(false); } };
+  // Reload when navigating between public profiles; form state is populated by load.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [id]);
+  const save = async () => { setSaving(true); setError(''); try { let updated = await api.updateMe({ display_name: displayName.trim(), bio: bio.trim(), location: location.trim(), telegram_username: telegram.replace(/^@/, '') }); if (avatar) updated = await api.uploadAvatar(avatar); setProfile(updated); setEditing(false); setAvatar(null); setNotice('Профиль обновлён'); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось сохранить профиль')); } finally { setSaving(false); } };
 
-  useEffect(() => {
-    if (!isOwnProfile && (!targetUserId || Number.isNaN(targetUserId))) {
-      setError('Некорректный профиль');
-      setIsLoading(false);
-      return;
-    }
+  if (loading) return <div className="page-shell"><div className="empty-state">Собираем профиль…</div></div>;
+  if (!profile) return <div className="page-shell"><div className="empty-state text-red-600">{error || 'Профиль не найден'}</div></div>;
+  const name = profile.display_name || profile.username; const initials = name.slice(0, 2).toUpperCase();
 
-    const load = async () => {
-      setError('');
-      setIsLoading(true);
-      try {
-        const profileData = isOwnProfile ? await api.getMe() : await api.getUserProfile(targetUserId!);
-        setProfile(profileData);
-        setDisplayName(profileData.display_name || '');
-        setBio(profileData.bio || '');
-        setLocation(profileData.location || '');
-        setTelegramUsername(profileData.telegram_username || '');
-
-        const userId = profileData.id;
-        const [adsData, reviewsData] = await Promise.all([
-          api.getUserServices(userId),
-          api.getUserReviews(userId),
-        ]);
-        setAds(adsData);
-        setReviews(reviewsData);
-      } catch (err) {
-        console.error(err);
-        setError(getApiErrorMessage(err, 'Не удалось загрузить профиль'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    load();
-  }, [id, isOwnProfile, targetUserId]);
-
-  const handleSaveProfile = async () => {
-    if (!canEdit) return;
-    try {
-      const updated = await api.updateMe({ display_name: displayName, bio, location, telegram_username: telegramUsername });
-      setProfile(updated);
-    } catch (err) {
-      console.error(err);
-      setError(getApiErrorMessage(err, 'Не удалось сохранить профиль'));
-    }
-  };
-
-  const handleAvatarUpload = async () => {
-    if (!canEdit || !avatarFile) return;
-    try {
-      const updated = await api.uploadAvatar(avatarFile);
-      setProfile(updated);
-      setAvatarFile(null);
-    } catch (err) {
-      console.error(err);
-      setError(getApiErrorMessage(err, 'Не удалось загрузить аватар'));
-    }
-  };
-
-  const handleReport = async (targetType: 'user' | 'review', targetId: number) => {
-    const reason = window.prompt('Опишите нарушение (минимум 10 символов)');
-    if (!reason) return;
-    try { await api.createReport(targetType, targetId, reason); window.alert('Жалоба отправлена'); }
-    catch (err) { setError(getApiErrorMessage(err, 'Не удалось отправить жалобу')); }
-  };
-
-  if (isLoading) {
-    return <div className="mx-auto max-w-5xl p-6 text-center text-[#8A8F99]">Загрузка профиля...</div>;
-  }
-
-  if (error || !profile) {
-    return <div className="mx-auto max-w-5xl p-6 text-center text-red-600">{error || 'Профиль не найден'}</div>;
-  }
-
-  return (
-    <div className="mx-auto max-w-5xl p-4 sm:p-6 space-y-8">
-      <section className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          <div className="h-28 w-28 overflow-hidden rounded-full bg-indigo-100 text-center text-3xl font-bold text-[#2F6FED]">
-            {profile.avatar_url ? (
-              <img src={fileUrl(profile.avatar_url)} alt={profile.username} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">{profile.username.slice(0, 2).toUpperCase()}</div>
-            )}
-          </div>
-
-          <div className="flex-1 space-y-3">
-            <div>
-              <h1 className="text-3xl font-bold text-[#1A1A1A]">{profile.display_name || profile.username}</h1>
-              <p className="text-sm text-[#8A8F99]">@{profile.username}</p>
-            </div>
-
-            {profile.bio && <p className="max-w-3xl text-slate-700">{profile.bio}</p>}
-            {profile.location && <p className="text-sm text-[#8A8F99]">Локация: {profile.location}</p>}
-            {profile.telegram_username && <a href={`https://t.me/${profile.telegram_username}`} target="_blank" rel="noreferrer" className="text-sm text-[#2F6FED]">Telegram: @{profile.telegram_username}</a>}
-
-            <div className="flex flex-wrap gap-2 text-sm">
-              <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">Объявлений: {ads.length}</span>
-              <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">Отзывов: {profile.reviews_count ?? reviews.length}</span>
-              <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">
-                Рейтинг: {profile.rating_avg ? profile.rating_avg.toFixed(1) : 'нет'}
-              </span>
-            </div>
-            {!isOwnProfile && getToken() && targetUserId && <button type="button" onClick={() => handleReport('user', targetUserId)} className="text-xs text-red-600 hover:underline">Пожаловаться на пользователя</button>}
-          </div>
+  return <div className="page-shell">
+    {error && <p className="form-error mb-5">{error}</p>}{notice && <p className="mb-5 rounded-2xl bg-[var(--mint)] p-3 text-sm font-bold text-[#157354]">✓ {notice}</p>}
+    <section className="surface relative overflow-hidden p-5 sm:p-8"><div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[var(--brand-soft)] blur-2xl" />
+      <div className="relative flex flex-col gap-6 sm:flex-row sm:items-start">
+        <div className="grid h-28 w-28 flex-none place-items-center overflow-hidden rounded-[30px] bg-gradient-to-br from-[var(--brand)] to-[#b287ff] text-3xl font-black text-white shadow-xl shadow-purple-200/60">{profile.avatar_url ? <img src={fileUrl(profile.avatar_url)} alt={name} className="h-full w-full object-cover" /> : initials}</div>
+        <div className="min-w-0 flex-1"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="eyebrow">{isOwn ? 'Ваш публичный профиль' : 'Профиль специалиста'}</p><h1 className="mt-2 text-3xl font-black tracking-tight text-[var(--ink)] sm:text-4xl">{name}</h1><p className="mt-1 text-sm text-[var(--muted)]">@{profile.username}{profile.location ? ` · ${profile.location}` : ''}</p></div><div className="flex gap-2">{isOwn ? <button onClick={() => setEditing(true)} className="button-primary">Редактировать</button> : getToken() && <button onClick={() => setReport({ type: 'user', id: profile.id })} className="button-secondary">Сообщить о проблеме</button>}</div></div>
+          <p className="mt-5 max-w-2xl whitespace-pre-wrap text-sm leading-7 text-[#51495c]">{profile.bio || (isOwn ? 'Добавьте пару строк о себе — живой профиль вызывает больше доверия.' : 'Пользователь пока ничего о себе не рассказал.')}</p>
+          <div className="mt-6 flex flex-wrap gap-3"><div className="rounded-2xl bg-[#f8f5fa] px-4 py-3"><b className="block text-xl text-[var(--ink)]">{profile.rating_avg?.toFixed(1) || '—'}</b><span className="text-xs text-[var(--muted)]">рейтинг</span></div><div className="rounded-2xl bg-[#f8f5fa] px-4 py-3"><b className="block text-xl text-[var(--ink)]">{reviews.length}</b><span className="text-xs text-[var(--muted)]">отзывов</span></div><div className="rounded-2xl bg-[#f8f5fa] px-4 py-3"><b className="block text-xl text-[var(--ink)]">{ads.length}</b><span className="text-xs text-[var(--muted)]">активных объявлений</span></div></div>
         </div>
+      </div>
+    </section>
 
-        {canEdit && (
-          <div className="mt-6 grid gap-4 rounded-2xl border bg-[#F2F3F5] p-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Имя</span>
-                <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Telegram username</span>
-                <input value={telegramUsername} onChange={(e) => setTelegramUsername(e.target.value.replace(/^@/, ''))} placeholder="username" className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-slate-700">Локация</span>
-                <input value={location} onChange={(e) => setLocation(e.target.value)} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
-              </label>
-            </div>
+    {editing && isOwn && <section className="surface mt-6 p-5 sm:p-7"><div className="mb-6 flex items-start justify-between"><div><h2 className="text-xl font-black">Настройка профиля</h2><p className="mt-1 text-sm text-[var(--muted)]">Эти данные помогут людям понять, можно ли вам доверять.</p></div><button onClick={() => setEditing(false)} className="icon-button">×</button></div><div className="grid gap-5 sm:grid-cols-2"><label className="field"><span>Как к вам обращаться</span><input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={100} /></label><label className="field"><span>Город или район</span><input value={location} onChange={e => setLocation(e.target.value)} maxLength={200} /></label><label className="field"><span>Telegram</span><input value={telegram} onChange={e => setTelegram(e.target.value.replace(/^@/, ''))} placeholder="username" /></label><label className="field"><span>Новый аватар</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => setAvatar(e.target.files?.[0] || null)} /></label><label className="field sm:col-span-2"><span>О себе</span><textarea value={bio} onChange={e => setBio(e.target.value)} rows={5} maxLength={2000} placeholder="Опыт, специализация, подход к работе" /></label></div><div className="modal-actions"><button onClick={() => setEditing(false)} className="button-secondary">Отмена</button><button disabled={saving} onClick={save} className="button-primary">{saving ? 'Сохраняем…' : 'Сохранить'}</button></div></section>}
 
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">О себе</span>
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={5} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
-            </label>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input type="file" accept=".jpg,.jpeg,.png,.webp,.gif" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="text-sm" />
-              <button type="button" onClick={handleAvatarUpload} className="rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
-                Загрузить аватар
-              </button>
-              <button type="button" onClick={handleSaveProfile} className="rounded-xl border border-[#E1E4EA] px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-white">
-                Сохранить профиль
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between border-b pb-3">
-          <h2 className="text-xl font-bold text-[#1A1A1A]">Объявления пользователя</h2>
-          <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-sm text-[#8A8F99]">{ads.length}</span>
-        </div>
-
-        {ads.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-[#8A8F99]">У пользователя пока нет активных объявлений.</div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {ads.map((item) => (
-              <Link key={item.id} to={`/services/${item.id}`} className="group rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md">
-                <div className="flex gap-4">
-                  <div className="h-24 w-24 overflow-hidden rounded-xl bg-[#F2F3F5] flex-shrink-0">
-                    {(item.image_url || item.images[0]?.url) ? (
-                      <img src={fileUrl(item.images[0]?.url || item.image_url)} alt={item.title} className="h-full w-full object-cover" />
-                    ) : null}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-semibold text-[#1A1A1A] group-hover:text-[#2F6FED]">{item.title}</h3>
-                    <p className="mt-1 text-sm font-semibold text-[#2F6FED]">{formatPrice(item)}</p>
-                    <p className="mt-2 line-clamp-2 text-sm text-[#8A8F99]">{item.description}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between border-b pb-3">
-          <h2 className="text-xl font-bold text-[#1A1A1A]">Отзывы</h2>
-          <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-sm text-[#8A8F99]">{reviews.length}</span>
-        </div>
-
-        {reviews.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-12 text-center text-[#8A8F99]">Пока нет отзывов.</div>
-        ) : (
-          <div className="space-y-3">
-            {reviews.map((review) => (
-              <div key={review.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-[#1A1A1A]">{review.author.display_name || review.author.username}</p>
-                    <p className="text-xs text-[#8A8F99]">@{review.author.username}</p>
-                  </div>
-                  <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-sm font-semibold text-[#2F6FED]">{review.rating}/5</span>
-                </div>
-                {review.text && <p className="mt-3 text-sm text-slate-700">{review.text}</p>}
-                {getToken() && <button type="button" onClick={() => handleReport('review', review.id)} className="mt-3 text-xs text-red-600 hover:underline">Пожаловаться</button>}
-              </div>
-            ))}
-          </div>
-        )}
-
-      </section>
+    <div className="mt-10 grid gap-10 lg:grid-cols-[1.1fr_.9fr]">
+      <section><div className="mb-5 flex items-end justify-between"><div><p className="eyebrow">Витрина</p><h2 className="mt-1 text-2xl font-black">Объявления</h2></div>{isOwn && <Link to="/my-ads" className="text-sm font-bold text-[var(--brand)]">Управлять →</Link>}</div>{ads.length ? <div className="grid gap-4 sm:grid-cols-2">{ads.map(item => <Link key={item.id} to={`/services/${item.id}`} className="surface group overflow-hidden transition hover:-translate-y-1"><div className="aspect-[16/10] overflow-hidden bg-[#f1edf4]">{(item.image_url || item.images[0]?.url) ? <img src={fileUrl(item.images[0]?.url || item.image_url)} alt={item.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <div className="grid h-full place-items-center text-3xl">✦</div>}</div><div className="p-4"><h3 className="line-clamp-2 font-black">{item.title}</h3><p className="mt-2 font-black text-[var(--brand)]">{formatPrice(item)}</p></div></Link>)}</div> : <div className="empty-state">Активных объявлений пока нет.</div>}</section>
+      <section><div className="mb-5"><p className="eyebrow">Репутация</p><h2 className="mt-1 text-2xl font-black">Отзывы</h2></div>{reviews.length ? <div className="space-y-4">{reviews.map(item => <article key={item.id} className="surface p-5"><div className="flex items-center justify-between gap-3"><div><p className="font-black">{item.author.display_name || item.author.username}</p><p className="text-xs text-[var(--muted)]">Подтверждённая сделка</p></div><span className="status-pill bg-[#fff3dc] text-[#9a5b00]">★ {item.rating}.0</span></div>{item.text && <p className="mt-4 text-sm leading-6 text-[#51495c]">{item.text}</p>}{getToken() && item.author.id !== profile.id && <button onClick={() => setReport({ type: 'review', id: item.id })} className="mt-3 text-xs font-bold text-[var(--muted)] hover:text-[var(--danger)]">Пожаловаться</button>}</article>)}</div> : <div className="empty-state">После завершённых сделок здесь появятся отзывы.</div>}</section>
     </div>
-  );
+    {report && <ReportModal open targetType={report.type} targetId={report.id} onClose={() => setReport(null)} onSuccess={() => setNotice('Жалоба отправлена модератору')} />}
+  </div>;
 };

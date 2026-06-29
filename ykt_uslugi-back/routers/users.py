@@ -11,6 +11,7 @@ from models.user import User
 from schemas.common import ApiResponse, CurrentUserProfileRead, ReviewRead, ServiceRead, UserProfileRead
 from schemas.user import ReviewCreate, UserProfileUpdate
 from services.files import delete_upload, save_upload
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -127,10 +128,15 @@ def create_user_review(
     if not response:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Отзыв доступен только после завершённой сделки")
 
-    owner_id = response.service.owner_id
-    participants = {owner_id, response.respondent_id}
-    if current_user.id not in participants or target_user.id not in participants or current_user.id == target_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Отзыв могут оставить только участники сделки")
+    if response.service.listing_type == "request":
+        customer_id, performer_id = response.service.owner_id, response.respondent_id
+    else:
+        customer_id, performer_id = response.respondent_id, response.service.owner_id
+    if current_user.id != performer_id or target_user.id != customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Отзыв может оставить только выбранный исполнитель после завершения сделки",
+        )
 
     existing = (
         db.query(Review)
@@ -149,7 +155,11 @@ def create_user_review(
         text=body.text,
     )
     db.add(review)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Вы уже оставили отзыв по этой сделке")
     db.refresh(review)
     return ApiResponse(message="Отзыв создан", data=ReviewRead.model_validate(review))
 
@@ -163,8 +173,8 @@ def delete_review(
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Отзыв не найден")
-    if review.author_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Опубликованный отзыв нельзя удалить — это сохраняет историю сделки")
 
     db.delete(review)
     db.commit()

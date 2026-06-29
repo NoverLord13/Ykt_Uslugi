@@ -34,14 +34,14 @@ export const Header = () => {
     navigate('/');
   };
 
-  const linkClass = (path: string) => `rounded-lg px-3 py-2 transition-colors ${location.pathname === path ? 'bg-[#EEF4FF] text-[#2F6FED]' : 'text-slate-700 hover:bg-[#F2F3F5] hover:text-[#2F6FED]'}`;
+  const linkClass = (path: string) => `rounded-xl px-3 py-2 text-sm font-bold transition-colors ${location.pathname === path ? 'bg-[var(--brand-soft)] text-[var(--brand)]' : 'text-[var(--muted)] hover:bg-[#f7f3fa] hover:text-[var(--ink)]'}`;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[#E1E4EA] bg-white/90 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 w-full border-b border-[var(--line)] bg-white/85 backdrop-blur-xl">
       <nav className="mx-auto flex min-h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 text-xl font-black tracking-tight text-[#1A1A1A]">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2F6FED] text-sm text-white shadow-md shadow-blue-200">Y</span>
-          <span>Ykt<span className="text-[#2F6FED]">.</span>Услуги</span>
+        <Link to="/" className="flex items-center gap-2.5 text-xl font-black tracking-tight text-[var(--ink)]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand)] to-[#a678ff] text-sm text-white shadow-md shadow-purple-200">Y</span>
+          <span>Ykt<span className="text-[var(--accent)]">.</span>Услуги</span>
         </Link>
 
         <button type="button" onClick={() => setIsMenuOpen((open) => !open)} aria-label="Открыть меню" aria-expanded={isMenuOpen} className="rounded-xl border border-[#E1E4EA] p-2 text-slate-700 md:hidden">
@@ -50,15 +50,15 @@ export const Header = () => {
 
         <div className={`${isMenuOpen ? 'flex' : 'hidden'} absolute left-0 right-0 top-16 flex-col gap-1 border-b border-[#E1E4EA] bg-white p-4 shadow-lg md:static md:flex md:flex-row md:items-center md:border-0 md:bg-transparent md:p-0 md:shadow-none`}>
           {isAuthenticated ? <>
-            <Link className={linkClass('/adadder')} to="/adadder">Добавить</Link>
             <Link className={linkClass('/my-ads')} to="/my-ads">Мои объявления</Link>
-            <Link className={linkClass('/responses')} to="/responses">Отклики</Link>
+            <Link className={linkClass('/responses')} to="/responses">Сделки</Link>
             <Link className={linkClass('/profile')} to="/profile">Профиль</Link>
             {isAdmin && <Link className={linkClass('/admin')} to="/admin">Админ</Link>}
-            <button onClick={handleLogout} className="rounded-lg px-3 py-2 text-left text-[#E8352B] transition-colors hover:bg-red-50">Выйти</button>
+            <Link className="button-primary md:ml-2" to="/adadder">＋ Добавить</Link>
+            <button onClick={handleLogout} className="rounded-lg px-3 py-2 text-left text-[var(--danger)] transition-colors hover:bg-red-50">Выйти</button>
           </> : <>
-            <Link className="rounded-lg px-3 py-2 font-semibold text-[#2F6FED] hover:bg-[#EEF4FF]" to="/login">Войти</Link>
-            <Link className="rounded-xl bg-[#2F6FED] px-4 py-2.5 text-center font-semibold text-white shadow-md shadow-blue-200 transition hover:bg-[#245DCC]" to="/register">Регистрация</Link>
+            <Link className="rounded-lg px-3 py-2 font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]" to="/login">Войти</Link>
+            <Link className="button-primary" to="/register">Регистрация</Link>
           </>}
         </div>
       </nav>

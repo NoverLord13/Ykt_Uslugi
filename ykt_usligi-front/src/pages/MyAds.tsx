@@ -1,156 +1,26 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock } from "../api/Api";
-import { getToken } from "../api/auth";
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock } from '../api/Api';
+import { Modal } from '../components/Modal';
+
+const statusMeta: Record<AdBlock['status'], { label: string; className: string }> = {
+  active: { label: 'Опубликовано', className: 'bg-[#dff8ee] text-[#157354]' }, hidden: { label: 'Скрыто', className: 'bg-[#f1eef3] text-[#746d80]' },
+  moderation: { label: 'На проверке', className: 'bg-[#fff3dc] text-[#9a5b00]' }, closed: { label: 'Закрыто', className: 'bg-[#eeeaff] text-[#5c3bdd]' },
+};
+type Filter = 'all' | AdBlock['status'];
 
 export const MyAds = () => {
-    const navigate = useNavigate();
-    const [ads, setAds] = useState<AdBlock[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState("");
-    const isAuthenticated = !!getToken();
+  const navigate = useNavigate(); const [ads, setAds] = useState<AdBlock[]>([]); const [filter, setFilter] = useState<Filter>('all'); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [deleting, setDeleting] = useState<AdBlock | null>(null); const [busy, setBusy] = useState(false);
+  useEffect(() => { api.getMyAdBlocks().then(setAds).catch(err => setError(getApiErrorMessage(err, 'Не удалось загрузить объявления'))).finally(() => setLoading(false)); }, []);
+  const visible = useMemo(() => filter === 'all' ? ads : ads.filter(item => item.status === filter), [ads, filter]);
+  const remove = async () => { if (!deleting) return; setBusy(true); setError(''); try { await api.deleteAdBlock(deleting.id); setAds(items => items.filter(item => item.id !== deleting.id)); setDeleting(null); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось удалить объявление')); setDeleting(null); } finally { setBusy(false); } };
+  const filters: { value: Filter; label: string }[] = [{ value: 'all', label: 'Все' }, { value: 'active', label: 'Опубликованы' }, { value: 'hidden', label: 'Скрыты' }, { value: 'closed', label: 'Закрыты' }, { value: 'moderation', label: 'На проверке' }];
 
-    useEffect(() => {
-        if (!isAuthenticated) {
-            setIsLoading(false);
-            return;
-        }
-
-        const loadMyAds = async () => {
-            setError("");
-            setIsLoading(true);
-
-            try {
-                const data = await api.getMyAdBlocks();
-                setAds(data);
-            } catch (error) {
-                console.error(error);
-                setError(getApiErrorMessage(error, "Не удалось загрузить ваши объявления"));
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        loadMyAds();
-    }, [isAuthenticated]);
-
-    const handleDelete = async (id: number, title: string) => {
-        const confirmed = window.confirm(`Удалить объявление "${title}"?`);
-        if (!confirmed) return;
-
-        try {
-            await api.deleteAdBlock(id);
-            setAds((prev) => prev.filter((ad) => ad.id !== id));
-        } catch (error) {
-            console.error(error);
-            alert(getApiErrorMessage(error, "Не удалось удалить объявление"));
-        }
-    };
-
-    if (!isAuthenticated) {
-        return (
-            <div className="p-6 max-w-7xl mx-auto">
-                <div className="rounded-2xl bg-white p-6 shadow-2xl border border-black">
-                    <h2 className="mb-3 text-2xl font-bold text-black">Мои объявления</h2>
-                    <p className="mb-4 text-[#8A8F99]">Войдите в аккаунт, чтобы увидеть свои объявления.</p>
-                    <button
-                        type="button"
-                        onClick={() => navigate("/login")}
-                        className="cursor-pointer rounded-[14px] bg-[#2F6FED] px-5 py-2.5 font-medium text-white shadow-lg shadow-[#2F6FED]/20 hover:bg-[#245DCC]"
-                    >
-                        Войти
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="p-6 max-w-7xl mx-auto">
-            <div className="mb-8 flex items-center justify-between gap-4">
-                <h2 className="text-3xl font-bold text-black">Мои объявления</h2>
-                <button
-                    type="button"
-                    onClick={() => navigate("/adadder")}
-                    className="cursor-pointer rounded-[14px] bg-[#2F6FED] px-5 py-2.5 font-medium text-white shadow-lg shadow-[#2F6FED]/20 hover:bg-[#245DCC]"
-                >
-                    Добавить объявление
-                </button>
-            </div>
-
-            {isLoading && (
-                <div className="py-20 text-center text-[#8A8F99]">Загрузка объявлений...</div>
-            )}
-
-            {!isLoading && error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>
-            )}
-
-            {!isLoading && !error && ads.length === 0 && (
-                <div className="py-20 text-center text-[#8A8F99]">У вас пока нет объявлений</div>
-            )}
-
-            {!isLoading && !error && ads.length > 0 && (
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {ads.map((ad) => (
-                        <div
-                            key={ad.id}
-                            className="overflow-hidden rounded-2xl border bg-white shadow-sm"
-                        >
-                            <div
-                                onClick={() => navigate(`/services/${ad.id}`)}
-                                className="aspect-square cursor-pointer overflow-hidden bg-[#F2F3F5]"
-                            >
-                                {(ad.image_url || ad.images[0]?.url) ? (
-                                    <img
-                                        src={fileUrl(ad.images[0]?.url || ad.image_url)}
-                                        alt={ad.title}
-                                        className="h-full w-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-full items-center justify-center text-slate-400">Нет фото</div>
-                                )}
-                            </div>
-
-                            <div className="p-4">
-                                <div className="mb-2 flex flex-wrap gap-2">
-                                    <span className="rounded-full bg-[#EEF4FF] px-2 py-1 text-xs font-semibold text-[#2F6FED]">
-                                        {listingTypeLabel(ad.listing_type)}
-                                    </span>
-                                    <span className="rounded-full bg-[#F2F3F5] px-2 py-1 text-xs text-slate-600">
-                                        {ad.status}
-                                    </span>
-                                </div>
-                                <h3 className="truncate text-lg font-bold text-[#1A1A1A]">{ad.title}</h3>
-                                <p className="mt-1 line-clamp-2 text-xs text-[#8A8F99]">
-                                    {ad.description || "Нет описания"}
-                                </p>
-                                {ad.category && <p className="mt-2 text-xs text-slate-400">{ad.category.name}</p>}
-                            </div>
-
-                            <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-[#F2F3F5] p-4">
-                                <span className="rounded-md border border-[#E1E4EA] bg-white px-2 py-1 text-xs font-semibold text-[#2F6FED]">
-                                    {formatPrice(ad)}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => navigate(`/services/${ad.id}/edit`)}
-                                    className="cursor-pointer rounded-md bg-[#2F6FED] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#245DCC]"
-                                >
-                                    Изменить
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDelete(ad.id, ad.title)}
-                                    className="cursor-pointer rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500"
-                                >
-                                    Удалить
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
+  return <div className="page-shell"><header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow">Ваши публикации</p><h1 className="page-title mt-2">Мои объявления</h1><p className="page-subtitle mt-3">Управляйте видимостью, обновляйте детали и следите за актуальностью предложений.</p></div><Link to="/adadder" className="button-primary">＋ Новое объявление</Link></header>
+      <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="surface p-4"><b className="text-2xl font-black">{ads.length}</b><p className="mt-1 text-xs text-[var(--muted)]">всего</p></div><div className="surface p-4"><b className="text-2xl font-black text-[#157354]">{ads.filter(a => a.status === 'active').length}</b><p className="mt-1 text-xs text-[var(--muted)]">в поиске</p></div><div className="surface p-4"><b className="text-2xl font-black text-[var(--brand)]">{ads.filter(a => a.listing_type === 'request').length}</b><p className="mt-1 text-xs text-[var(--muted)]">задач</p></div><Link to="/responses" className="surface group p-4"><b className="text-sm font-black text-[var(--brand)]">Отклики →</b><p className="mt-2 text-xs text-[var(--muted)] group-hover:text-[var(--ink)]">Перейти к сделкам</p></Link></section>
+    <div className="mb-5 flex gap-2 overflow-x-auto pb-1">{filters.map(item => <button key={item.value} onClick={() => setFilter(item.value)} className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold ${filter === item.value ? 'bg-[var(--ink)] text-white' : 'bg-white text-[var(--muted)] ring-1 ring-[var(--line)]'}`}>{item.label} <span className="opacity-60">{item.value === 'all' ? ads.length : ads.filter(ad => ad.status === item.value).length}</span></button>)}</div>
+    {error && <p className="form-error mb-5">{error}</p>}
+    {loading ? <div className="empty-state">Загружаем объявления…</div> : visible.length ? <div className="grid gap-4">{visible.map(ad => { const status = statusMeta[ad.status]; const destination = ad.status === 'active' ? `/services/${ad.id}` : `/services/${ad.id}/edit`; return <article key={ad.id} className="surface overflow-hidden p-3 sm:p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><Link to={destination} className="h-40 w-full flex-none overflow-hidden rounded-2xl bg-[#f1edf4] sm:h-28 sm:w-36">{(ad.image_url || ad.images[0]?.url) ? <img src={fileUrl(ad.images[0]?.url || ad.image_url)} alt={ad.title} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-2xl">✦</div>}</Link><div className="min-w-0 flex-1 px-1"><div className="flex flex-wrap gap-2"><span className={`status-pill ${status.className}`}>{status.label}</span><span className="status-pill bg-[#f8f5fa] text-[var(--muted)]">{listingTypeLabel(ad.listing_type)}</span></div><Link to={destination} className="mt-2 block truncate text-lg font-black hover:text-[var(--brand)]">{ad.title}</Link><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"><b>{formatPrice(ad)}</b><span className="text-[var(--muted)]">{ad.location || 'Место не указано'}</span><span className="text-[var(--muted)]">Обновлено {new Date(ad.updated_at).toLocaleDateString('ru-RU')}</span></div></div><div className="flex gap-2 sm:flex-col"><button onClick={() => navigate(`/services/${ad.id}/edit`)} className="button-secondary flex-1">Изменить</button><button onClick={() => setDeleting(ad)} className="button-quiet flex-1 text-[var(--danger)]">Удалить</button></div></div></article>; })}</div> : <div className="empty-state"><div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-2xl">✦</div><h2 className="text-lg font-black text-[var(--ink)]">Здесь пока пусто</h2><p className="mt-2 text-sm">Создайте объявление или выберите другой фильтр.</p></div>}
+    <Modal open={!!deleting} onClose={() => !busy && setDeleting(null)} title="Удалить объявление?" description="Оно исчезнет из поиска вместе с историей откликов. Если хотите вернуться позже, лучше скрыть его в настройках."><div className="rounded-2xl bg-[#f8f5fa] p-4 text-sm font-bold">{deleting?.title}</div><div className="modal-actions"><button onClick={() => setDeleting(null)} className="button-secondary">Оставить</button><button disabled={busy} onClick={remove} className="button-danger">{busy ? 'Удаляем…' : 'Удалить навсегда'}</button></div></Modal>
+  </div>;
 };

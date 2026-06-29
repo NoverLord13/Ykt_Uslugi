@@ -1,248 +1,50 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getApiErrorMessage, type Category } from '../api/Api';
 
 export const AdAdder = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); const [categories, setCategories] = useState<Category[]>([]);
+  const [title, setTitle] = useState(''); const [description, setDescription] = useState(''); const [price, setPrice] = useState('');
+  const [listingType, setListingType] = useState<'offer' | 'request'>('offer'); const [priceType, setPriceType] = useState<'fixed' | 'from' | 'negotiable'>('fixed');
+  const [categoryId, setCategoryId] = useState(''); const [subcategoryId, setSubcategoryId] = useState(''); const [location, setLocation] = useState(''); const [contactPhone, setContactPhone] = useState('');
+  const [files, setFiles] = useState<File[]>([]); const [error, setError] = useState(''); const [isSaving, setIsSaving] = useState(false);
+  const selectedCategory = categories.find(category => String(category.id) === categoryId);
+  const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files]);
+  useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews]);
+  useEffect(() => { api.getCategories().then(setCategories).catch(err => setError(getApiErrorMessage(err, 'Не удалось загрузить категории'))); api.getMe().then(user => setContactPhone(user.phone_number || '')).catch(() => undefined); }, []);
+  useEffect(() => { setSubcategoryId(''); }, [categoryId]);
+  useEffect(() => { if (priceType === 'negotiable') setPrice(''); }, [priceType]);
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [listingType, setListingType] = useState<'offer' | 'request'>('offer');
-  const [categoryId, setCategoryId] = useState('');
-  const [subcategoryId, setSubcategoryId] = useState('');
-  const [priceType, setPriceType] = useState<'fixed' | 'from' | 'negotiable'>('fixed');
-  const [location, setLocation] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [error, setError] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const selectedCategory = categories.find((category) => String(category.id) === categoryId);
-
-  useEffect(() => {
-    api.getCategories()
-      .then(setCategories)
-      .catch((err) => {
-        console.error(err);
-        setError(getApiErrorMessage(err, 'Не удалось загрузить категории'));
-      });
-
-    api.getMe()
-      .then((user) => {
-        if (user.phone_number) {
-          setContactPhone(user.phone_number);
-        }
-      })
-      .catch((err) => {
-        console.error('Не удалось загрузить профиль для получения номера телефона', err);
-      });
-  }, []);
-
-  useEffect(() => {
-    setSubcategoryId('');
-  }, [categoryId]);
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files || []).slice(0, 8);
-    setFiles(selectedFiles);
-  };
-
-  const handleUpload = async () => {
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => { const picked = Array.from(event.target.files || []); if (picked.length > 8) setError('Можно добавить не больше 8 фотографий'); setFiles(picked.slice(0, 8)); };
+  const submit = async () => {
     setError('');
-    if (!title.trim() || !description.trim() || !price.trim() || Number(price) < 0) {
-      setError('Заполните название, описание и цену');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('title', title.trim());
-    formData.append('description', description.trim());
-    formData.append('price', price);
-    formData.append('listing_type', listingType);
-    formData.append('price_type', priceType);
-
-    if (categoryId) formData.append('category_id', categoryId);
-    if (subcategoryId) formData.append('subcategory_id', subcategoryId);
-    if (location.trim()) formData.append('location', location.trim());
-    if (contactPhone.trim()) formData.append('contact_phone', contactPhone.trim());
-    files.forEach((file) => formData.append('images', file));
-
-    setIsSaving(true);
-    try {
-      const created = await api.addAdBlock(formData);
-      navigate(`/services/${created.id}`);
-    } catch (err) {
-      console.error(err);
-      setError(getApiErrorMessage(err, 'Ошибка при создании объявления. Проверьте авторизацию и данные формы.'));
-    } finally {
-      setIsSaving(false);
-    }
+    if (title.trim().length < 3) return setError('Название должно содержать минимум 3 символа');
+    if (description.trim().length < 20) return setError('Добавьте немного деталей — минимум 20 символов');
+    if (priceType !== 'negotiable' && (!price || Number(price) <= 0)) return setError('Укажите стоимость больше нуля или выберите договорную цену');
+    const data = new FormData(); data.append('title', title.trim()); data.append('description', description.trim()); data.append('listing_type', listingType); data.append('price_type', priceType);
+    if (priceType !== 'negotiable') data.append('price', price); if (categoryId) data.append('category_id', categoryId); if (subcategoryId) data.append('subcategory_id', subcategoryId); if (location.trim()) data.append('location', location.trim()); if (contactPhone) data.append('contact_phone', contactPhone); files.forEach(file => data.append('images', file));
+    setIsSaving(true); try { const created = await api.addAdBlock(data); navigate(`/services/${created.id}`); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать объявление')); } finally { setIsSaving(false); }
   };
 
-  return (
-    <div className="mx-auto max-w-3xl p-4 sm:p-6">
-      <div className="rounded-2xl border bg-white p-5 shadow-sm sm:p-6">
-        <h1 className="mb-2 text-2xl font-bold text-[#1A1A1A]">Добавить объявление</h1>
-        <p className="mb-6 text-sm text-[#8A8F99]">Укажите детали услуги или запроса, чтобы объявление было понятнее.</p>
-
-        {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
-
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">Тип объявления</span>
-              <select
-                value={listingType}
-                onChange={(event) => setListingType(event.target.value as 'offer' | 'request')}
-                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-              >
-                <option value="offer">Оказываю услугу</option>
-                <option value="request">Ищу услугу</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">Тип цены</span>
-              <select
-                value={priceType}
-                onChange={(event) => setPriceType(event.target.value as 'fixed' | 'from' | 'negotiable')}
-                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-              >
-                <option value="fixed">Фиксированная</option>
-                <option value="from">От указанной суммы</option>
-                <option value="negotiable">Договорная</option>
-              </select>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-slate-700">Название</span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Например: Услуги сантехника"
-              className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-slate-700">Описание</span>
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Подробно опишите услугу или запрос"
-              rows={7}
-              className="w-full resize-y rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-            />
-          </label>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">Цена</span>
-              <input
-                type="number"
-                value={price}
-                onChange={(event) => setPrice(event.target.value)}
-                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">Локация</span>
-              <input
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                placeholder="Якутск, район"
-                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">Категория</span>
-              <select
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
-                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none focus:border-[#2F6FED]"
-              >
-                <option value="">Не выбрано</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-semibold text-slate-700">Подкатегория</span>
-              <select
-                value={subcategoryId}
-                onChange={(event) => setSubcategoryId(event.target.value)}
-                disabled={!selectedCategory}
-                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-black outline-none disabled:bg-[#F2F3F5] focus:border-[#2F6FED]"
-              >
-                <option value="">Не выбрано</option>
-                {selectedCategory?.subcategories.map((subcategory) => (
-                  <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-slate-700">Контактный телефон</span>
-            <input
-              type="tel"
-              value={contactPhone}
-              disabled
-              readOnly
-              className="w-full rounded-xl border border-[#E1E4EA] bg-[#F2F3F5] px-3 py-2 text-[#8A8F99] outline-none cursor-not-allowed"
-            />
-            <span className="mt-1 block text-xs text-[#8A8F99]">Номер телефона привязан к вашему профилю и не может быть изменен.</span>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold text-slate-700">Фото объявления</span>
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,.gif"
-              multiple
-              onChange={handleFileChange}
-              className="block w-full text-sm text-black file:mr-4 file:rounded-xl file:border-0 file:bg-[#2F6FED] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#245DCC]"
-            />
-            <span className="mt-1 block text-xs text-slate-400">Можно выбрать до 8 фото</span>
-          </label>
-
-          {files.length > 0 && (
-            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
-              {files.map((file) => (
-                <img
-                  key={`${file.name}-${file.lastModified}`}
-                  src={URL.createObjectURL(file)}
-                  alt={file.name}
-                  className="aspect-square rounded-xl object-cover"
-                />
-              ))}
-            </div>
-          )}
+  return <div className="page-shell max-w-[980px]">
+    <button onClick={() => navigate(-1)} className="button-quiet mb-4 -ml-3">← Назад</button>
+    <header className="mb-8"><p className="eyebrow">Новое объявление</p><h1 className="page-title mt-2">Расскажите, что нужно</h1><p className="page-subtitle mt-3">Чёткое описание и несколько фотографий заметно повышают шанс быстрого отклика.</p></header>
+    <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <section className="surface p-5 sm:p-8">
+        {error && <p className="form-error mb-5">{error}</p>}
+        <div className="grid gap-7">
+          <div><p className="mb-3 text-sm font-black">Что вы хотите сделать?</p><div className="grid gap-3 sm:grid-cols-2">{([['offer','Предложить услугу','Я исполнитель и готов помочь'],['request','Найти исполнителя','Мне нужна помощь с задачей']] as const).map(([value,label,hint]) => <button type="button" key={value} onClick={() => setListingType(value)} className={`choice-tile min-h-20 ${listingType === value ? 'choice-tile-active' : ''}`}><b className="block">{label}</b><span className="mt-1 block text-xs font-medium opacity-70">{hint}</span></button>)}</div></div>
+          <label className="field"><span>Название *</span><input maxLength={200} value={title} onChange={e => setTitle(e.target.value)} placeholder={listingType === 'offer' ? 'Например, соберу кухню за один день' : 'Например, нужно собрать кухню'} /><small className="text-right text-xs text-[var(--muted)]">{title.length}/200</small></label>
+          <label className="field"><span>Описание *</span><textarea maxLength={5000} rows={7} value={description} onChange={e => setDescription(e.target.value)} placeholder="Опишите объём работ, сроки, важные детали и ожидаемый результат" /></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="field"><span>Как формируется цена?</span><select value={priceType} onChange={e => setPriceType(e.target.value as typeof priceType)}><option value="fixed">Точная цена</option><option value="from">Цена от</option><option value="negotiable">Обсудим с исполнителем</option></select></label>{priceType !== 'negotiable' ? <label className="field"><span>Стоимость, ₽ *</span><input type="number" min="1" inputMode="numeric" value={price} onChange={e => setPrice(e.target.value)} placeholder="5 000" /></label> : <div className="rounded-2xl bg-[var(--brand-soft)] p-4 text-sm leading-6 text-[var(--brand-dark)]">Цена не обязательна — договоритесь после уточнения деталей.</div>}</div>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="field"><span>Категория <small>поможет в поиске</small></span><select value={categoryId} onChange={e => setCategoryId(e.target.value)}><option value="">Выберите категорию</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Подкатегория</span><select value={subcategoryId} disabled={!selectedCategory} onChange={e => setSubcategoryId(e.target.value)}><option value="">Выберите подкатегорию</option>{selectedCategory?.subcategories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="field"><span>Где выполнять работу?</span><input value={location} maxLength={200} onChange={e => setLocation(e.target.value)} placeholder="Якутск, район или удалённо" /></label><label className="field"><span>Телефон из профиля</span><input value={contactPhone} disabled readOnly /></label></div>
+          <label className="field"><span>Фотографии <small>до 8 файлов</small></span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={handleFileChange} /></label>
+          {previews.length > 0 && <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">{previews.map(({ file, url }) => <div key={`${file.name}-${file.lastModified}`} className="relative aspect-square overflow-hidden rounded-2xl"><img src={url} alt="Предпросмотр" className="h-full w-full object-cover" /></div>)}</div>}
+          <div className="flex flex-col-reverse gap-3 border-t border-[var(--line)] pt-6 sm:flex-row sm:justify-end"><button onClick={() => navigate(-1)} className="button-secondary">Сохранить не нужно</button><button disabled={isSaving} onClick={submit} className="button-primary">{isSaving ? 'Публикуем…' : 'Опубликовать объявление'}</button></div>
         </div>
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" onClick={() => navigate('/')} className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#F2F3F5]">
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={handleUpload}
-            disabled={isSaving}
-            className="rounded-xl bg-[#2F6FED] px-5 py-2 text-sm font-semibold text-white hover:bg-[#245DCC] disabled:opacity-60"
-          >
-            {isSaving ? 'Сохранение...' : 'Создать'}
-          </button>
-        </div>
-      </div>
+      </section>
+      <aside className="h-fit rounded-3xl bg-[var(--ink)] p-6 text-white lg:sticky lg:top-24"><span className="text-2xl">✦</span><h2 className="mt-4 text-lg font-black">Что увидят люди</h2><ul className="mt-4 space-y-4 text-sm leading-6 text-white/65"><li>Понятный тип: предложение или задача</li><li>Цена без двусмысленности</li><li>Категория и место для быстрого поиска</li><li>Ваш подтверждённый номер для связи</li></ul><p className="mt-6 rounded-2xl bg-white/10 p-4 text-xs leading-5 text-white/70">Обязательны только название, содержательное описание и цена — если она не договорная.</p></aside>
     </div>
-  );
+  </div>;
 };

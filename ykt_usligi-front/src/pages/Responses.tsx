@@ -1,90 +1,65 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getApiErrorMessage, type ServiceResponse } from '../api/Api';
+import { ReviewModal } from '../components/FeedbackModals';
 
-const labels: Record<ServiceResponse['status'], string> = {
-  new: 'Новый', accepted: 'Принят', completed: 'Завершён', cancelled: 'Отменён',
+const statusMeta: Record<ServiceResponse['status'], { label: string; className: string; hint: string }> = {
+  new: { label: 'Ждёт решения', className: 'bg-[#fff3dc] text-[#9a5b00]', hint: 'Отклик отправлен, решение ещё не принято' },
+  accepted: { label: 'В работе', className: 'bg-[#eeeaff] text-[#5c3bdd]', hint: 'Исполнитель выбран, работа идёт' },
+  completed: { label: 'Выполнено', className: 'bg-[#dff8ee] text-[#157354]', hint: 'Сделка успешно завершена' },
+  cancelled: { label: 'Отменено', className: 'bg-[#f1eef3] text-[#746d80]', hint: 'Сделка отменена одним из участников' },
+  declined: { label: 'Не выбран', className: 'bg-[#fff0f3] text-[#b42f49]', hint: 'Заказчик выбрал другого исполнителя' },
 };
+
+type View = 'active' | 'history';
 
 export const Responses = () => {
-  const [sent, setSent] = useState<ServiceResponse[]>([]);
-  const [received, setReceived] = useState<ServiceResponse[]>([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [sent, setSent] = useState<ServiceResponse[]>([]); const [received, setReceived] = useState<ServiceResponse[]>([]);
+  const [view, setView] = useState<View>('active'); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busyId, setBusyId] = useState<number | null>(null);
+  const [reviewing, setReviewing] = useState<ServiceResponse | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [sentData, receivedData] = await Promise.all([api.getSentResponses(), api.getReceivedResponses()]);
-      setSent(sentData);
-      setReceived(receivedData);
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Не удалось загрузить отклики'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const load = async () => { setLoading(true); setError(''); try { const [sentData, receivedData] = await Promise.all([api.getSentResponses(), api.getReceivedResponses()]); setSent(sentData); setReceived(receivedData); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось загрузить сделки')); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, []);
+  const all = useMemo(() => [...received.map(item => ({ item, incoming: true })), ...sent.map(item => ({ item, incoming: false }))], [received, sent]);
+  const visible = all.filter(({ item }) => view === 'active' ? ['new', 'accepted'].includes(item.status) : ['completed', 'cancelled', 'declined'].includes(item.status));
+  const activeCount = all.filter(({ item }) => ['new', 'accepted'].includes(item.status)).length;
 
-  const changeStatus = async (id: number, status: 'accepted' | 'completed' | 'cancelled') => {
-    try {
-      await api.updateResponse(id, status);
-      await load();
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Не удалось изменить статус'));
-    }
-  };
+  const changeStatus = async (id: number, status: 'accepted' | 'completed' | 'cancelled' | 'declined') => { setBusyId(id); setError(''); try { await api.updateResponse(id, status); await load(); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось изменить статус')); } finally { setBusyId(null); } };
 
-  const leaveReview = async (item: ServiceResponse, targetUserId: number) => {
-    const ratingText = window.prompt('Оценка от 1 до 5', '5');
-    if (!ratingText) return;
-    const rating = Number(ratingText);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      setError('Оценка должна быть от 1 до 5');
-      return;
-    }
-    const text = window.prompt('Комментарий к отзыву (необязательно)', '') || undefined;
-    try {
-      await api.createReview(targetUserId, { response_id: item.id, rating, text });
-      setError('');
-      window.alert('Отзыв опубликован');
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Не удалось оставить отзыв'));
-    }
-  };
-
-  const card = (item: ServiceResponse, incoming: boolean) => (
-    <article key={item.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link to={`/services/${item.service.id}`} className="font-bold text-[#1A1A1A] hover:text-[#2F6FED]">{item.service.title}</Link>
-          <p className="mt-1 text-sm text-[#8A8F99]">
-            {incoming ? `От: ${item.respondent.display_name || item.respondent.username}` : `Автор: ${item.service.owner.display_name || item.service.owner.username}`}
-          </p>
+  const card = ({ item, incoming }: { item: ServiceResponse; incoming: boolean }) => {
+    const meta = statusMeta[item.status];
+    const peer = incoming ? item.respondent : item.service.owner;
+    return <article key={`${incoming}-${item.id}`} className="surface group p-5 transition hover:-translate-y-0.5 hover:shadow-[0_18px_50px_rgb(55_38_91/0.11)] sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2"><span className={`status-pill ${meta.className}`}>{meta.label}</span><span className="text-xs text-[var(--muted)]">{incoming ? 'Входящий отклик' : 'Мой отклик'}</span></div>
+          <Link to={`/services/${item.service.id}`} className="block truncate text-lg font-black text-[var(--ink)] transition group-hover:text-[var(--brand)]">{item.service.title}</Link>
+          <Link to={`/users/${peer.id}`} className="mt-1 inline-block text-sm text-[var(--muted)] hover:text-[var(--brand)]">{incoming ? 'От' : 'Объявление автора'} · {peer.display_name || peer.username}</Link>
         </div>
-        <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#2F6FED]">{labels[item.status]}</span>
+        <p className="max-w-xs text-xs leading-5 text-[var(--muted)] sm:text-right">{meta.hint}</p>
       </div>
-      {item.message && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{item.message}</p>}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {incoming && item.status === 'new' && <button onClick={() => changeStatus(item.id, 'accepted')} className="rounded-xl bg-[#2F6FED] px-3 py-2 text-sm font-semibold text-white">Принять</button>}
-        {incoming && item.status === 'accepted' && <button onClick={() => changeStatus(item.id, 'completed')} className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">Завершить</button>}
-        {item.status !== 'completed' && item.status !== 'cancelled' && <button onClick={() => changeStatus(item.id, 'cancelled')} className="rounded-xl border px-3 py-2 text-sm font-semibold text-slate-700">Отменить</button>}
-        {item.status === 'completed' && (
-          <button onClick={() => leaveReview(item, incoming ? item.respondent.id : item.service.owner.id)} className="rounded-xl border border-[#2F6FED] px-3 py-2 text-sm font-semibold text-[#2F6FED]">Оставить отзыв</button>
-        )}
+      {item.message && <div className="mt-4 rounded-2xl bg-[#f8f5fa] px-4 py-3 text-sm leading-6 text-[#51495c]">“{item.message}”</div>}
+      <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--line)] pt-4">
+        {item.can_accept && <button disabled={busyId === item.id} onClick={() => changeStatus(item.id, 'accepted')} className="button-primary">Выбрать исполнителя</button>}
+        {incoming && item.status === 'new' && <button disabled={busyId === item.id} onClick={() => changeStatus(item.id, 'declined')} className="button-secondary">Отклонить</button>}
+        {item.can_complete && <button disabled={busyId === item.id} onClick={() => changeStatus(item.id, 'completed')} className="button-primary">Подтвердить выполнение</button>}
+        {item.can_cancel && <button disabled={busyId === item.id} onClick={() => changeStatus(item.id, 'cancelled')} className="button-quiet">Отменить</button>}
+        {item.can_review && <button onClick={() => setReviewing(item)} className="button-primary">Оценить заказчика</button>}
+        {item.review_left && <span className="status-pill bg-[#f1eef3] text-[var(--muted)]">✓ Отзыв оставлен</span>}
       </div>
-    </article>
-  );
+    </article>;
+  };
 
-  if (loading) return <div className="mx-auto max-w-6xl p-6 text-center text-[#8A8F99]">Загрузка откликов...</div>;
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-8 p-4 sm:p-6">
-      <h1 className="text-3xl font-bold text-[#1A1A1A]">Отклики и сделки</h1>
-      {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</div>}
-      <section><h2 className="mb-3 text-xl font-bold">Входящие</h2><div className="grid gap-3">{received.length ? received.map((item) => card(item, true)) : <p className="text-[#8A8F99]">Входящих откликов пока нет.</p>}</div></section>
-      <section><h2 className="mb-3 text-xl font-bold">Отправленные</h2><div className="grid gap-3">{sent.length ? sent.map((item) => card(item, false)) : <p className="text-[#8A8F99]">Вы пока ни на что не откликались.</p>}</div></section>
+  return <div className="page-shell">
+    <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow">Рабочее пространство</p><h1 className="page-title mt-2">Отклики и сделки</h1><p className="page-subtitle mt-3">Все договорённости в одном месте — от первого отклика до честной оценки результата.</p></div><Link to="/" className="button-secondary">Найти объявления</Link></header>
+    <div className="mb-6 flex gap-2 overflow-x-auto rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-[var(--line)] sm:w-fit">
+      <button onClick={() => setView('active')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold ${view === 'active' ? 'bg-[var(--ink)] text-white' : 'text-[var(--muted)]'}`}>В работе <span className="ml-1 opacity-70">{activeCount}</span></button>
+      <button onClick={() => setView('history')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold ${view === 'history' ? 'bg-[var(--ink)] text-white' : 'text-[var(--muted)]'}`}>История <span className="ml-1 opacity-70">{all.length - activeCount}</span></button>
     </div>
-  );
+    {error && <p className="form-error mb-5">{error}</p>}
+    {loading ? <div className="empty-state">Загружаем ваши сделки…</div> : visible.length ? <div className="grid gap-4 lg:grid-cols-2">{visible.map(card)}</div> : <div className="empty-state"><div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-2xl">↗</div><h2 className="text-lg font-black text-[var(--ink)]">{view === 'active' ? 'Активных сделок пока нет' : 'История пока пуста'}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6">{view === 'active' ? 'Откликнитесь на подходящее объявление или дождитесь отклика на своё.' : 'Здесь появятся завершённые, отменённые и отклонённые сделки.'}</p></div>}
+    {reviewing && <ReviewModal open responseId={reviewing.id} targetUserId={(reviewing.service.listing_type === 'request' ? reviewing.service.owner : reviewing.respondent).id} performerName={(reviewing.service.listing_type === 'request' ? reviewing.service.owner : reviewing.respondent).display_name || customerName(reviewing)} onClose={() => setReviewing(null)} onSuccess={() => void load()} />}
+  </div>;
 };
+
+const customerName = (item: ServiceResponse) => (item.service.listing_type === 'request' ? item.service.owner : item.respondent).username;

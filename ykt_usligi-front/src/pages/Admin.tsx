@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getApiErrorMessage, type AdBlock, type Report, type Review, type UserProfile } from '../api/Api';
 
+const reportReasons: Record<string, string> = { spam: 'Спам или реклама', fraud: 'Мошенничество', abuse: 'Оскорбления', illegal: 'Запрещённый контент', wrong_info: 'Недостоверная информация', other: 'Другая причина' };
+
 export const Admin = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [services, setServices] = useState<AdBlock[]>([]);
@@ -21,7 +23,7 @@ export const Admin = () => {
     <h1 className="text-3xl font-bold">Администрирование</h1>
     {error && <div className="rounded-xl bg-red-50 p-3 text-red-600">{error}</div>}
     <section><h2 className="mb-3 text-xl font-bold">Жалобы</h2><div className="grid gap-3">{reports.map((item) => <div key={item.id} className="rounded-xl border bg-white p-4">
-      <p className="font-semibold">{item.target_type} #{item.target_id} · {item.status}</p><p className="my-2 text-sm text-slate-700">{item.reason}</p>
+      <p className="font-semibold">{item.target_type} #{item.target_id} · {item.status}</p><p className="my-2 text-sm font-semibold text-slate-700">{reportReasons[item.reason] || item.reason}</p>{item.comment && <p className="mb-3 whitespace-pre-wrap text-sm text-slate-600">{item.comment}</p>}
       <div className="flex gap-2">{(['reviewed', 'resolved', 'rejected'] as const).map((status) => <button key={status} onClick={async () => { await api.adminUpdateReport(item.id, status); await load(); }} className="rounded-lg border px-2 py-1 text-xs">{status}</button>)}</div>
     </div>)}</div></section>
     <section><h2 className="mb-3 text-xl font-bold">Отзывы</h2><div className="grid gap-2">{reviews.map((review) => <div key={review.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3"><div><p className="font-semibold">@{review.author.username} → @{review.target_user.username}: {review.rating}/5</p><p className="text-sm text-slate-600">{review.text || 'Без комментария'}</p></div><button onClick={async () => { await api.adminDeleteReview(review.id); await load(); }} className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600">Удалить</button></div>)}</div></section>

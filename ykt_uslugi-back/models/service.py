@@ -53,7 +53,7 @@ class Service(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text)
-    price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     listing_type: Mapped[str] = mapped_column(String(20), default="offer", index=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True, index=True)
     subcategory_id: Mapped[int | None] = mapped_column(ForeignKey("subcategories.id"), nullable=True, index=True)

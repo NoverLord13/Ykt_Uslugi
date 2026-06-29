@@ -64,7 +64,7 @@ export interface AdBlock {
   id: number;
   title: string;
   description: string;
-  price: number;
+  price: number | null;
   listing_type: 'offer' | 'request';
   category: Category | null;
   subcategory: Subcategory | null;
@@ -107,12 +107,17 @@ export interface ReviewCreate {
 
 export interface ServiceResponse {
   id: number;
-  service: { id: number; title: string; owner: UserBrief };
+  service: { id: number; title: string; listing_type: 'offer' | 'request'; owner: UserBrief };
   respondent: UserBrief;
   message: string | null;
-  status: 'new' | 'accepted' | 'completed' | 'cancelled';
+  status: 'new' | 'accepted' | 'completed' | 'cancelled' | 'declined';
   created_at: string;
   updated_at: string;
+  can_accept: boolean;
+  can_complete: boolean;
+  can_cancel: boolean;
+  can_review: boolean;
+  review_left: boolean;
 }
 
 export interface Report {
@@ -121,6 +126,7 @@ export interface Report {
   target_type: 'service' | 'user' | 'review';
   target_id: number;
   reason: string;
+  comment: string | null;
   status: 'new' | 'reviewed' | 'resolved' | 'rejected';
   created_at: string;
   updated_at: string;
@@ -170,8 +176,9 @@ export const fileUrl = (path?: string | null) => {
 
 export const formatPrice = (ad: Pick<AdBlock, 'price' | 'price_type'>) => {
   if (ad.price_type === 'negotiable') return 'Цена договорная';
-  if (ad.price_type === 'from') return `от ${ad.price} руб.`;
-  return `${ad.price} руб.`;
+  const value = new Intl.NumberFormat('ru-RU').format(ad.price ?? 0);
+  if (ad.price_type === 'from') return `от ${value} ₽`;
+  return `${value} ₽`;
 };
 
 export const listingTypeLabel = (type: AdBlock['listing_type']) =>
@@ -186,7 +193,7 @@ export const api = {
   },
 
   getAdBlockById: async (id: number): Promise<AdBlock> => {
-    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/${id}`);
+    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
@@ -201,6 +208,11 @@ export const api = {
     const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/services/mine`, {
       headers: authHeaders(),
     });
+    return unwrap(response);
+  },
+
+  getMyAdBlockById: async (id: number): Promise<AdBlock> => {
+    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/manage/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
@@ -295,13 +307,13 @@ export const api = {
     return unwrap(response);
   },
 
-  updateResponse: async (id: number, status: 'accepted' | 'completed' | 'cancelled'): Promise<ServiceResponse> => {
+  updateResponse: async (id: number, status: 'accepted' | 'completed' | 'cancelled' | 'declined'): Promise<ServiceResponse> => {
     const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/responses/${id}`, { status }, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  createReport: async (targetType: 'service' | 'user' | 'review', targetId: number, reason: string): Promise<Report> => {
-    const response = await axios.post<ApiResponse<Report>>(`${API_URL}/reports`, { target_type: targetType, target_id: targetId, reason }, { headers: authHeaders() });
+  createReport: async (targetType: 'service' | 'user' | 'review', targetId: number, reason: string, comment?: string): Promise<Report> => {
+    const response = await axios.post<ApiResponse<Report>>(`${API_URL}/reports`, { target_type: targetType, target_id: targetId, reason, comment: comment || null }, { headers: authHeaders() });
     return unwrap(response);
   },
 

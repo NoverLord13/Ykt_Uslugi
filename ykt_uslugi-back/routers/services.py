@@ -5,7 +5,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from database import get_db
-from dependencies import get_current_user
+from dependencies import get_current_user, get_optional_user
+from models.response import ServiceResponse
 from models.service import Category, Service, ServiceImage, Subcategory
 from models.user import User
 from schemas.common import ApiResponse, ServiceRead
@@ -34,6 +35,8 @@ def _validate_category_pair(db: Session, category_id: int | None, subcategory_id
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Категория не найдена")
 
     if subcategory_id is not None:
+        if category_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Сначала выберите категорию")
         subcategory = db.query(Subcategory).filter(Subcategory.id == subcategory_id).first()
         if not subcategory:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Подкатегория не найдена")
@@ -57,6 +60,8 @@ def list_services(
     sort: str = Query("newest", pattern=r"^(newest|oldest|price_asc|price_desc)$"),
     db: Session = Depends(get_db),
 ):
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(status_code=400, detail="Минимальная цена не может быть больше максимальной")
     query = (
         db.query(Service)
         .options(*_service_load_options())
@@ -102,21 +107,41 @@ def list_my_services(current_user: User = Depends(get_current_user), db: Session
         .order_by(Service.created_at.desc())
         .all()
     )
+
+
+@router.get("/manage/{service_id}", response_model=ApiResponse[ServiceRead])
+def get_my_service(service_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    service = db.query(Service).options(*_service_load_options()).filter(
+        Service.id == service_id, Service.owner_id == current_user.id
+    ).first()
+    if not service:
+        raise HTTPException(status_code=404, detail="Объявление не найдено или принадлежит другому пользователю")
+    return ApiResponse(message="Объявление владельца", data=_to_service_read(service))
     return ApiResponse(
         message="Ваши услуги",
         data=[_to_service_read(s) for s in services],
     )
 
 @router.get("/{service_id}", response_model=ApiResponse[ServiceRead])
-def get_service(service_id: int, db: Session = Depends(get_db)):
+def get_service(service_id: int, current_user: User | None = Depends(get_optional_user), db: Session = Depends(get_db)):
     service = (
         db.query(Service)
         .options(*_service_load_options())
-        .filter(Service.id == service_id, Service.is_active.is_(True))
+        .filter(Service.id == service_id)
         .first()
     )
     if not service:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Услуга не найдена")
+    has_access = service.is_active and service.status == "active"
+    if current_user and service.owner_id == current_user.id:
+        has_access = True
+    if current_user and db.query(ServiceResponse.id).filter(
+        ServiceResponse.service_id == service.id,
+        ServiceResponse.respondent_id == current_user.id,
+    ).first():
+        has_access = True
+    if not has_access:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Объявление больше не опубликовано")
     return ApiResponse(message="Услуга найдена", data=_to_service_read(service))
 
 
@@ -124,7 +149,7 @@ def get_service(service_id: int, db: Session = Depends(get_db)):
 async def create_service(
     title: str = Form(..., min_length=1, max_length=200),
     description: str = Form(..., min_length=1, max_length=5000),
-    price: Decimal = Form(..., ge=0),
+    price: Decimal | None = Form(None, ge=0),
     listing_type: str = Form("offer", pattern=r"^(offer|request)$"),
     category_id: int | None = Form(None),
     subcategory_id: int | None = Form(None),
@@ -137,6 +162,14 @@ async def create_service(
     db: Session = Depends(get_db),
 ):
     _validate_category_pair(db, category_id, subcategory_id)
+    title = title.strip()
+    description = description.strip()
+    if not title or not description:
+        raise HTTPException(status_code=400, detail="Название и описание не могут состоять из пробелов")
+    if price_type != "negotiable" and (price is None or price <= 0):
+        raise HTTPException(status_code=400, detail="Укажите цену больше нуля или выберите договорную цену")
+    if price_type == "negotiable":
+        price = None
 
     upload_files = [file for file in (images or []) if file and file.filename]
     if image and image.filename:
@@ -209,9 +242,13 @@ async def update_service(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Можно редактировать только свои услуги")
 
     if title is not None:
-        service.title = title
+        service.title = title.strip()
+        if not service.title:
+            raise HTTPException(status_code=400, detail="Название не может состоять из пробелов")
     if description is not None:
-        service.description = description
+        service.description = description.strip()
+        if not service.description:
+            raise HTTPException(status_code=400, detail="Описание не может состоять из пробелов")
     if price is not None:
         service.price = price
     if listing_type is not None:
@@ -226,11 +263,21 @@ async def update_service(
         service.location = location
     if price_type is not None:
         service.price_type = price_type
+        if price_type == "negotiable":
+            service.price = None
+        elif service.price is None:
+            raise HTTPException(status_code=400, detail="Для выбранного типа цены укажите стоимость")
     if status_value is not None:
+        if service.status == "moderation" and status_value != "moderation":
+            raise HTTPException(status_code=403, detail="Объявление на модерации может опубликовать только администратор")
+        if service.status != "moderation" and status_value == "moderation":
+            raise HTTPException(status_code=400, detail="Отправить объявление на модерацию может только администратор")
         service.status = status_value
         service.is_active = status_value == "active"
     if contact_phone is not None:
         service.contact_phone = contact_phone or current_user.phone_number
+    if service.price_type != "negotiable" and (service.price is None or service.price <= 0):
+        raise HTTPException(status_code=400, detail="Укажите цену больше нуля или выберите договорную цену")
     upload_files = [file for file in (images or []) if file and file.filename]
     if image and image.filename:
         upload_files.insert(0, image)
@@ -312,6 +359,11 @@ def delete_service(
     if service.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Можно удалять только свои услуги")
 
+    active_deal = db.query(ServiceResponse.id).filter(
+        ServiceResponse.service_id == service.id, ServiceResponse.status == "accepted"
+    ).first()
+    if active_deal:
+        raise HTTPException(status_code=409, detail="Нельзя удалить объявление с активной сделкой. Сначала завершите или отмените её")
     image_urls = {image.url for image in service.images}
     if service.image_url:
         image_urls.add(service.image_url)

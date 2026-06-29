@@ -115,7 +115,7 @@ class ServiceRead(BaseModel):
     id: int
     title: str
     description: str
-    price: Decimal
+    price: Decimal | None
     listing_type: str
     category: CategoryRead | None = None
     subcategory: SubcategoryRead | None = None

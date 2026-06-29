@@ -39,12 +39,12 @@ export const AdEditor = () => {
       try {
         const [categoriesData, ad] = await Promise.all([
           api.getCategories(),
-          api.getAdBlockById(serviceId),
+          api.getMyAdBlockById(serviceId),
         ]);
         setCategories(categoriesData);
         setTitle(ad.title);
         setDescription(ad.description);
-        setPrice(String(ad.price));
+        setPrice(ad.price == null ? '' : String(ad.price));
         setListingType(ad.listing_type);
         setCategoryId(ad.category ? String(ad.category.id) : '');
         setSubcategoryId(ad.subcategory ? String(ad.subcategory.id) : '');
@@ -75,15 +75,15 @@ export const AdEditor = () => {
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !description.trim() || !price.trim() || Number(price) < 0) {
-      setError('Заполните название, описание и цену');
+    if (!title.trim() || !description.trim() || (priceType !== 'negotiable' && (!price.trim() || Number(price) <= 0))) {
+      setError('Заполните название, описание и корректную цену или выберите договорную');
       return;
     }
 
     const formData = new FormData();
     formData.append('title', title.trim());
     formData.append('description', description.trim());
-    formData.append('price', price);
+    if (priceType !== 'negotiable') formData.append('price', price);
     formData.append('listing_type', listingType);
     formData.append('price_type', priceType);
     formData.append('status', statusValue);
@@ -164,7 +164,7 @@ export const AdEditor = () => {
           </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Цена" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
+            {priceType === 'negotiable' ? <div className="rounded-xl bg-[var(--brand-soft)] px-4 py-3 text-sm text-[var(--brand-dark)]">Стоимость будет согласована в переписке</div> : <input type="number" min="1" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Цена" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[var(--brand)]" />}
             <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Локация" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
           </div>
 
