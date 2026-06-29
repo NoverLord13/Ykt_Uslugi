@@ -19,6 +19,7 @@
 
 html {
   background: var(--color-page);
+  scroll-behavior: smooth;
 }
 
 body {
@@ -26,6 +27,9 @@ body {
   background: var(--color-page);
   color: var(--color-graphite);
   font-family: Roboto, Arial, Verdana, sans-serif;
+  min-width: 320px;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -37,4 +41,22 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgb(47 111 237 / 20%);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(47 111 237 / 18%);
 }

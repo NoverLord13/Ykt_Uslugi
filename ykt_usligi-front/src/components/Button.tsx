@@ -45,7 +45,8 @@ export const Button = (props:ButtonProps)=>
     };
 
     return(
-        <div
+        <button
+        type="button"
         className={
             defaultClass + 
             " " + 
@@ -62,6 +63,6 @@ export const Button = (props:ButtonProps)=>
             <span
             className={classes.colors[color].text}>{title}
             </span>
-        </div>
+        </button>
     );
 };

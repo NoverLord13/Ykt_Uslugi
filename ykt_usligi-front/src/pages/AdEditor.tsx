@@ -75,7 +75,7 @@ export const AdEditor = () => {
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !description.trim() || !price.trim()) {
+    if (!title.trim() || !description.trim() || !price.trim() || Number(price) < 0) {
       setError('Заполните название, описание и цену');
       return;
     }
@@ -88,10 +88,13 @@ export const AdEditor = () => {
     formData.append('price_type', priceType);
     formData.append('status', statusValue);
     if (categoryId) formData.append('category_id', categoryId);
+    else formData.append('clear_category', 'true');
     if (subcategoryId) formData.append('subcategory_id', subcategoryId);
+    else formData.append('clear_subcategory', 'true');
     formData.append('location', location.trim());
     formData.append('contact_phone', contactPhone.trim());
     files.forEach((file) => formData.append('images', file));
+    if (existingImages.length === 0 && files.length === 0) formData.append('clear_images', 'true');
 
     setIsSaving(true);
     setError('');
@@ -196,10 +199,11 @@ export const AdEditor = () => {
               </div>
             </div>
           )}
+          {existingImages.length > 0 && files.length === 0 && <button type="button" onClick={() => setExistingImages([])} className="text-sm text-red-600 hover:underline">Удалить текущие фото</button>}
 
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-[#1A1A1A]">Заменить фото</span>
-            <input type="file" accept="image/*" multiple onChange={handleFileChange} className="block w-full text-sm" />
+            <input type="file" accept=".jpg,.jpeg,.png,.webp,.gif" multiple onChange={handleFileChange} className="block w-full text-sm" />
           </label>
         </div>
 

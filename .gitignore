@@ -51,10 +51,10 @@ ykt_uslugi-back/*.sqlite
 ykt_uslugi-back/*.sqlite3
 
 #Скрытые содержимого uploads
-uploads/*
+ykt_uslugi-back/uploads/*
 
 #Исключаем из игнора файл чтобы Git видел саму папку
-!uploads/.gitkeep
+!ykt_uslugi-back/uploads/.gitkeep
 
 # Frontend (Vite / React)
 ykt_usligi-front/node_modules/

@@ -10,7 +10,7 @@ from models.service import Category, Service, ServiceImage, Subcategory
 from models.user import User
 from schemas.common import ApiResponse, ServiceRead
 from schemas.service import ServiceUpdate
-from services.files import save_upload
+from services.files import delete_upload, save_uploads
 
 router = APIRouter(prefix="/services", tags=["services"])
 MAX_SERVICE_IMAGES = 8
@@ -144,7 +144,7 @@ async def create_service(
     if len(upload_files) > MAX_SERVICE_IMAGES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Можно загрузить максимум 8 фото")
 
-    image_urls = [await save_upload(file) for file in upload_files]
+    image_urls = await save_uploads(upload_files)
     image_url = image_urls[0] if image_urls else None
 
     service = Service(
@@ -157,12 +157,18 @@ async def create_service(
         subcategory_id=subcategory_id,
         location=location,
         price_type=price_type,
-        contact_phone=current_user.phone_number,
+        contact_phone=contact_phone or current_user.phone_number,
         image_url=image_url,
         images=[ServiceImage(url=url, position=index) for index, url in enumerate(image_urls)],
     )
     db.add(service)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        for url in image_urls:
+            delete_upload(url)
+        raise
     db.refresh(service)
     
     service = (
@@ -178,16 +184,19 @@ async def create_service(
 @router.put("/{service_id}", response_model=ApiResponse[ServiceRead])
 async def update_service(
     service_id: int,
-    title: str | None = Form(None),
-    description: str | None = Form(None),
-    price: Decimal | None = Form(None),
+    title: str | None = Form(None, min_length=1, max_length=200),
+    description: str | None = Form(None, min_length=1, max_length=5000),
+    price: Decimal | None = Form(None, ge=0),
     listing_type: str | None = Form(None, pattern=r"^(offer|request)$"),
     category_id: int | None = Form(None),
     subcategory_id: int | None = Form(None),
-    location: str | None = Form(None),
+    clear_category: bool = Form(False),
+    clear_subcategory: bool = Form(False),
+    location: str | None = Form(None, max_length=200),
     price_type: str | None = Form(None, pattern=r"^(fixed|from|negotiable)$"),
     status_value: str | None = Form(None, alias="status", pattern=r"^(active|hidden|moderation|closed)$"),
-    contact_phone: str | None = Form(None),
+    contact_phone: str | None = Form(None, max_length=20),
+    clear_images: bool = Form(False),
     image: UploadFile | None = File(None),
     images: list[UploadFile] | None = File(None),
     current_user: User = Depends(get_current_user),
@@ -207,9 +216,9 @@ async def update_service(
         service.price = price
     if listing_type is not None:
         service.listing_type = listing_type
-    if category_id is not None or subcategory_id is not None:
-        next_category_id = category_id if category_id is not None else service.category_id
-        next_subcategory_id = subcategory_id if subcategory_id is not None else service.subcategory_id
+    if category_id is not None or subcategory_id is not None or clear_category or clear_subcategory:
+        next_category_id = None if clear_category else category_id if category_id is not None else service.category_id
+        next_subcategory_id = None if clear_category or clear_subcategory else subcategory_id if subcategory_id is not None else service.subcategory_id
         _validate_category_pair(db, next_category_id, next_subcategory_id)
         service.category_id = next_category_id
         service.subcategory_id = next_subcategory_id
@@ -220,18 +229,38 @@ async def update_service(
     if status_value is not None:
         service.status = status_value
         service.is_active = status_value == "active"
-    service.contact_phone = current_user.phone_number
+    if contact_phone is not None:
+        service.contact_phone = contact_phone or current_user.phone_number
     upload_files = [file for file in (images or []) if file and file.filename]
     if image and image.filename:
         upload_files.insert(0, image)
+    old_image_urls: set[str] = set()
+    if upload_files or clear_images:
+        old_image_urls = {stored_image.url for stored_image in service.images}
+        if service.image_url:
+            old_image_urls.add(service.image_url)
     if upload_files:
         if len(upload_files) > MAX_SERVICE_IMAGES:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Можно загрузить максимум 8 фото")
-        image_urls = [await save_upload(file) for file in upload_files]
+        image_urls = await save_uploads(upload_files)
         service.images = [ServiceImage(url=url, position=index) for index, url in enumerate(image_urls)]
         service.image_url = image_urls[0]
+    elif clear_images:
+        service.images = []
+        service.image_url = None
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        if upload_files:
+            for url in image_urls:
+                delete_upload(url)
+        raise
+    if upload_files or clear_images:
+        for url in old_image_urls:
+            if not upload_files or url not in image_urls:
+                delete_upload(url)
     db.refresh(service)
     service = db.query(Service).options(*_service_load_options()).filter(Service.id == service.id).first()
     return ApiResponse(message="Услуга обновлена", data=_to_service_read(service))
@@ -283,6 +312,11 @@ def delete_service(
     if service.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Можно удалять только свои услуги")
 
+    image_urls = {image.url for image in service.images}
+    if service.image_url:
+        image_urls.add(service.image_url)
     db.delete(service)
     db.commit()
+    for url in image_urls:
+        delete_upload(url)
     return ApiResponse(message="Услуга удалена")

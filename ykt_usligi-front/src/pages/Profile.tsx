@@ -12,9 +12,8 @@ export const Profile = () => {
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
+  const [telegramUsername, setTelegramUsername] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [reviewText, setReviewText] = useState('');
-  const [reviewRating, setReviewRating] = useState(5);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -37,6 +36,7 @@ export const Profile = () => {
         setDisplayName(profileData.display_name || '');
         setBio(profileData.bio || '');
         setLocation(profileData.location || '');
+        setTelegramUsername(profileData.telegram_username || '');
 
         const userId = profileData.id;
         const [adsData, reviewsData] = await Promise.all([
@@ -59,7 +59,7 @@ export const Profile = () => {
   const handleSaveProfile = async () => {
     if (!canEdit) return;
     try {
-      const updated = await api.updateMe({ display_name: displayName, bio, location });
+      const updated = await api.updateMe({ display_name: displayName, bio, location, telegram_username: telegramUsername });
       setProfile(updated);
     } catch (err) {
       console.error(err);
@@ -79,21 +79,11 @@ export const Profile = () => {
     }
   };
 
-  const handleCreateReview = async () => {
-    if (!targetUserId) return;
-    try {
-      await api.createReview(targetUserId, {
-        rating: reviewRating,
-        text: reviewText,
-      });
-      const reviewsData = await api.getUserReviews(targetUserId);
-      setReviews(reviewsData);
-      setReviewText('');
-      setReviewRating(5);
-    } catch (err) {
-      console.error(err);
-      setError(getApiErrorMessage(err, 'Не удалось оставить отзыв'));
-    }
+  const handleReport = async (targetType: 'user' | 'review', targetId: number) => {
+    const reason = window.prompt('Опишите нарушение (минимум 10 символов)');
+    if (!reason) return;
+    try { await api.createReport(targetType, targetId, reason); window.alert('Жалоба отправлена'); }
+    catch (err) { setError(getApiErrorMessage(err, 'Не удалось отправить жалобу')); }
   };
 
   if (isLoading) {
@@ -124,6 +114,7 @@ export const Profile = () => {
 
             {profile.bio && <p className="max-w-3xl text-slate-700">{profile.bio}</p>}
             {profile.location && <p className="text-sm text-[#8A8F99]">Локация: {profile.location}</p>}
+            {profile.telegram_username && <a href={`https://t.me/${profile.telegram_username}`} target="_blank" rel="noreferrer" className="text-sm text-[#2F6FED]">Telegram: @{profile.telegram_username}</a>}
 
             <div className="flex flex-wrap gap-2 text-sm">
               <span className="rounded-full bg-[#F2F3F5] px-3 py-1 text-slate-700">Объявлений: {ads.length}</span>
@@ -132,6 +123,7 @@ export const Profile = () => {
                 Рейтинг: {profile.rating_avg ? profile.rating_avg.toFixed(1) : 'нет'}
               </span>
             </div>
+            {!isOwnProfile && getToken() && targetUserId && <button type="button" onClick={() => handleReport('user', targetUserId)} className="text-xs text-red-600 hover:underline">Пожаловаться на пользователя</button>}
           </div>
         </div>
 
@@ -141,6 +133,10 @@ export const Profile = () => {
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-slate-700">Имя</span>
                 <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-slate-700">Telegram username</span>
+                <input value={telegramUsername} onChange={(e) => setTelegramUsername(e.target.value.replace(/^@/, ''))} placeholder="username" className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-slate-700">Локация</span>
@@ -154,7 +150,7 @@ export const Profile = () => {
             </label>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="text-sm" />
+              <input type="file" accept=".jpg,.jpeg,.png,.webp,.gif" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="text-sm" />
               <button type="button" onClick={handleAvatarUpload} className="rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
                 Загрузить аватар
               </button>
@@ -216,27 +212,12 @@ export const Profile = () => {
                   <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-sm font-semibold text-[#2F6FED]">{review.rating}/5</span>
                 </div>
                 {review.text && <p className="mt-3 text-sm text-slate-700">{review.text}</p>}
+                {getToken() && <button type="button" onClick={() => handleReport('review', review.id)} className="mt-3 text-xs text-red-600 hover:underline">Пожаловаться</button>}
               </div>
             ))}
           </div>
         )}
 
-        {!isOwnProfile && getToken() && targetUserId && (
-          <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-bold text-[#1A1A1A]">Оставить отзыв</h3>
-            <div className="grid gap-3">
-              <select value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))} className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]">
-                {[5, 4, 3, 2, 1].map((rating) => (
-                  <option key={rating} value={rating}>{rating} / 5</option>
-                ))}
-              </select>
-              <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={4} placeholder="Ваш отзыв" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
-              <button type="button" onClick={handleCreateReview} className="w-fit rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
-                Отправить отзыв
-              </button>
-            </div>
-          </div>
-        )}
       </section>
     </div>
   );

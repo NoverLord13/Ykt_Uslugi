@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock } from '../api/Api';
+import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock, type UserProfile } from '../api/Api';
+import { getToken } from '../api/auth';
 
 export const ServiceDetails = () => {
   const { id } = useParams();
@@ -11,6 +12,9 @@ export const ServiceDetails = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showPhone, setShowPhone] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [responseMessage, setResponseMessage] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
 
   useEffect(() => {
     const serviceId = Number(id);
@@ -39,7 +43,26 @@ export const ServiceDetails = () => {
     };
 
     loadData();
+    if (getToken()) api.getMe().then(setCurrentUser).catch(() => setCurrentUser(null));
   }, [id]);
+
+  const handleResponse = async () => {
+    if (!ad) return;
+    setActionMessage('');
+    try {
+      await api.createResponse(ad.id, responseMessage.trim());
+      setResponseMessage('');
+      setActionMessage('Отклик отправлен автору объявления');
+    } catch (err) { setActionMessage(getApiErrorMessage(err, 'Не удалось отправить отклик')); }
+  };
+
+  const handleReport = async () => {
+    if (!ad) return;
+    const reason = window.prompt('Опишите нарушение (минимум 10 символов)');
+    if (!reason) return;
+    try { await api.createReport('service', ad.id, reason); setActionMessage('Жалоба отправлена администрации'); }
+    catch (err) { setActionMessage(getApiErrorMessage(err, 'Не удалось отправить жалобу')); }
+  };
 
   if (isLoading) {
     return <div className="mx-auto max-w-6xl p-6 text-center text-[#8A8F99]">Загрузка объявления...</div>;
@@ -120,21 +143,23 @@ export const ServiceDetails = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => alert(`Открыть чат WhatsApp: ${ad.contact_phone}`)}
+                <a
+                  href={`https://wa.me/${ad.contact_phone.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
                   className="cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-3 py-2 text-xs font-semibold text-white hover:bg-[#20ba5a] transition-colors"
                 >
                   Написать в WhatsApp
-                </button>
+                </a>
 
-                <button
-                  type="button"
-                  onClick={() => alert(`Открыть чат Telegram: ${ad.contact_phone}`)}
+                {ad.owner.telegram_username && <a
+                  href={`https://t.me/${ad.owner.telegram_username}`}
+                  target="_blank"
+                  rel="noreferrer"
                   className="cursor-pointer flex items-center justify-center gap-2 rounded-xl bg-[#0088cc] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0077b3] transition-colors"
                 >
                   Написать в Telegram
-                </button>
+                </a>}
               </div>
             </div>
           )}
@@ -155,6 +180,15 @@ export const ServiceDetails = () => {
               </div>
             </Link>
           </div>
+
+          {currentUser && currentUser.id !== ad.owner.id && <div className="mt-5 border-t pt-5">
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Сообщение автору</label>
+            <textarea value={responseMessage} onChange={(e) => setResponseMessage(e.target.value)} maxLength={2000} rows={3} placeholder="Коротко опишите предложение или задайте вопрос" className="w-full rounded-xl border px-3 py-2 text-sm" />
+            <button type="button" onClick={handleResponse} className="mt-2 w-full rounded-xl bg-[#2F6FED] px-4 py-2.5 text-sm font-semibold text-white">Откликнуться</button>
+          </div>}
+          {!currentUser && <Link to="/login" className="mt-5 block rounded-xl bg-[#2F6FED] px-4 py-2.5 text-center text-sm font-semibold text-white">Войти, чтобы откликнуться</Link>}
+          {actionMessage && <p className="mt-3 text-sm text-slate-600">{actionMessage}</p>}
+          {currentUser && currentUser.id !== ad.owner.id && <button type="button" onClick={handleReport} className="mt-4 text-xs text-red-600 hover:underline">Пожаловаться на объявление</button>}
         </aside>
       </div>
 

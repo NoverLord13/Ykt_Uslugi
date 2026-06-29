@@ -37,6 +37,7 @@ export function completeRegistration(
   verificationToken: string,
   username: string,
   password: string,
+  acceptTerms: boolean,
 ) {
   return apiRequest<TokenData>("/auth/register/complete", {
     method: "POST",
@@ -44,6 +45,7 @@ export function completeRegistration(
       verification_token: verificationToken,
       username,
       password,
+      accept_terms: acceptTerms,
     }),
   });
 }

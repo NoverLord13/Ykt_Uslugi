@@ -1,37 +1,39 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from dependencies import get_current_user
 from models.review import Review
+from models.response import ServiceResponse
 from models.service import Service
 from models.user import User
-from schemas.common import ApiResponse, ReviewRead, ServiceRead, UserProfileRead
+from schemas.common import ApiResponse, CurrentUserProfileRead, ReviewRead, ServiceRead, UserProfileRead
 from schemas.user import ReviewCreate, UserProfileUpdate
-from services.files import save_upload
+from services.files import delete_upload, save_upload
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-def _profile_response(user: User, db: Session) -> UserProfileRead:
+def _profile_response(user: User, db: Session, *, private: bool = False) -> UserProfileRead | CurrentUserProfileRead:
     rating_avg, reviews_count = (
         db.query(func.avg(Review.rating), func.count(Review.id))
         .filter(Review.target_user_id == user.id)
         .one()
     )
-    data = UserProfileRead.model_validate(user)
+    schema = CurrentUserProfileRead if private else UserProfileRead
+    data = schema.model_validate(user)
     data.rating_avg = float(rating_avg) if rating_avg is not None else None
     data.reviews_count = reviews_count or 0
     return data
 
 
-@router.get("/me", response_model=ApiResponse[UserProfileRead])
+@router.get("/me", response_model=ApiResponse[CurrentUserProfileRead])
 def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return ApiResponse(message="Профиль пользователя", data=_profile_response(current_user, db))
+    return ApiResponse(message="Профиль пользователя", data=_profile_response(current_user, db, private=True))
 
 
-@router.patch("/me", response_model=ApiResponse[UserProfileRead])
+@router.patch("/me", response_model=ApiResponse[CurrentUserProfileRead])
 def update_me(
     body: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -43,19 +45,27 @@ def update_me(
 
     db.commit()
     db.refresh(current_user)
-    return ApiResponse(message="Профиль обновлен", data=_profile_response(current_user, db))
+    return ApiResponse(message="Профиль обновлен", data=_profile_response(current_user, db, private=True))
 
 
-@router.post("/me/avatar", response_model=ApiResponse[UserProfileRead])
+@router.post("/me/avatar", response_model=ApiResponse[CurrentUserProfileRead])
 async def upload_avatar(
     avatar: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    current_user.avatar_url = await save_upload(avatar)
-    db.commit()
+    old_avatar_url = current_user.avatar_url
+    new_avatar_url = await save_upload(avatar)
+    current_user.avatar_url = new_avatar_url
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_upload(new_avatar_url)
+        raise
     db.refresh(current_user)
-    return ApiResponse(message="Аватар обновлен", data=_profile_response(current_user, db))
+    delete_upload(old_avatar_url)
+    return ApiResponse(message="Аватар обновлен", data=_profile_response(current_user, db, private=True))
 
 
 @router.get("/{user_id}", response_model=ApiResponse[UserProfileRead])
@@ -87,6 +97,7 @@ def get_user_reviews(user_id: int, db: Session = Depends(get_db)):
 
     reviews = (
         db.query(Review)
+        .options(joinedload(Review.author), joinedload(Review.target_user))
         .filter(Review.target_user_id == user_id)
         .order_by(Review.created_at.desc())
         .all()
@@ -107,23 +118,33 @@ def create_user_review(
     if target_user.id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя оставить отзыв самому себе")
 
-    if body.service_id is not None:
-        service = db.query(Service).filter(Service.id == body.service_id, Service.owner_id == target_user.id).first()
-        if not service:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Объявление не принадлежит пользователю")
+    response = (
+        db.query(ServiceResponse)
+        .options(joinedload(ServiceResponse.service))
+        .filter(ServiceResponse.id == body.response_id, ServiceResponse.status == "completed")
+        .first()
+    )
+    if not response:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Отзыв доступен только после завершённой сделки")
+
+    owner_id = response.service.owner_id
+    participants = {owner_id, response.respondent_id}
+    if current_user.id not in participants or target_user.id not in participants or current_user.id == target_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Отзыв могут оставить только участники сделки")
 
     existing = (
         db.query(Review)
-        .filter(Review.author_id == current_user.id, Review.target_user_id == target_user.id)
+        .filter(Review.author_id == current_user.id, Review.response_id == response.id)
         .first()
     )
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Вы уже оставили отзыв этому пользователю")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Вы уже оставили отзыв по этой сделке")
 
     review = Review(
         author_id=current_user.id,
         target_user_id=target_user.id,
-        service_id=body.service_id,
+        service_id=response.service_id,
+        response_id=response.id,
         rating=body.rating,
         text=body.text,
     )

@@ -24,6 +24,7 @@ export const Register = () => {
   const [verificationToken, setVerificationToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   const handleSendCode = async () => {
     setError("");
@@ -57,9 +58,13 @@ export const Register = () => {
 
   const handleComplete = async () => {
     setError("");
+    if (!acceptTerms) {
+      setError("Примите условия использования и политику конфиденциальности");
+      return;
+    }
     setLoading(true);
     try {
-      const response = await completeRegistration(verificationToken, username, password);
+      const response = await completeRegistration(verificationToken, username, password, acceptTerms);
       if (!response.data?.access_token) {
         throw new Error("Токен не получен");
       }
@@ -96,6 +101,10 @@ export const Register = () => {
               onChange={(e) => setPhone(e.target.value)}
               className="w-full border border-[#E1E4EA] rounded-xl px-4 py-3 text-black"
             />
+            <label className="flex items-start gap-2 text-sm text-[#8A8F99]">
+              <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} className="mt-1" />
+              <span>Я принимаю <Link to="/terms" className="text-[#2F6FED]">условия использования</Link> и <Link to="/privacy" className="text-[#2F6FED]">политику конфиденциальности</Link>.</span>
+            </label>
             <Button
               size="middle"
               color="primary"

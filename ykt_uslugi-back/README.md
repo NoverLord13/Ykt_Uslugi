@@ -92,9 +92,12 @@ http://localhost:8000/docs
 ./venv/bin/alembic downgrade -1
 ```
 
-Текущая миграция:
+Текущие миграции:
 
 - `202606170001_expand_backend_schema.py`
+- `202606290001_add_responses_reports_and_privacy.py`
+
+Вторая миграция добавляет отклики/сделки, жалобы, привязку отзывов к завершённым сделкам, Telegram username и фиксацию принятия юридических условий.
 
 Она добавляет категории, подкатегории, несколько фото, отзывы, профиль пользователя и расширенные поля объявления.
 
@@ -278,7 +281,8 @@ Authorization: Bearer <access_token>
 {
   "verification_token": "token",
   "username": "user_name",
-  "password": "password123"
+  "password": "password123",
+  "accept_terms": true
 }
 ```
 
@@ -328,6 +332,25 @@ Query-параметры:
 ```text
 GET /services?q=ремонт&listing_type=offer&category_id=1&skip=0&limit=20&sort=newest
 ```
+
+### Отклики и сделки
+
+- `POST /services/{service_id}/responses` — отправить отклик;
+- `GET /responses/sent` — отправленные отклики;
+- `GET /responses/received` — отклики на свои объявления;
+- `PATCH /responses/{response_id}` — принять, завершить или отменить отклик.
+
+Статусы: `new`, `accepted`, `completed`, `cancelled`. Отзыв можно создать только между участниками завершённой сделки, передав `response_id`.
+
+### Жалобы
+
+- `POST /reports` — пожаловаться на объявление, пользователя или отзыв;
+- `GET /admin/reports` — очередь жалоб для администратора;
+- `PATCH /admin/reports/{report_id}` — изменить статус жалобы.
+
+### Приватность и файлы
+
+Публичный профиль не возвращает телефон и административные флаги. Загружаемые изображения ограничены 5 МБ, проверяются по MIME, расширению и сигнатуре файла. При замене или удалении сущности локальные файлы удаляются.
 
 #### GET `/services/mine`
 

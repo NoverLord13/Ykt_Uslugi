@@ -18,5 +18,9 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Загрузка данных и сброс зависимых полей являются намеренной синхронизацией UI.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

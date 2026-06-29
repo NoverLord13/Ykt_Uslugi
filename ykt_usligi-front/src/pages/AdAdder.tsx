@@ -51,7 +51,7 @@ export const AdAdder = () => {
 
   const handleUpload = async () => {
     setError('');
-    if (!title.trim() || !description.trim() || !price.trim()) {
+    if (!title.trim() || !description.trim() || !price.trim() || Number(price) < 0) {
       setError('Заполните название, описание и цену');
       return;
     }
@@ -207,7 +207,7 @@ export const AdAdder = () => {
             <span className="mb-1 block text-sm font-semibold text-slate-700">Фото объявления</span>
             <input
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,.gif"
               multiple
               onChange={handleFileChange}
               className="block w-full text-sm text-black file:mr-4 file:rounded-xl file:border-0 file:bg-[#2F6FED] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#245DCC]"

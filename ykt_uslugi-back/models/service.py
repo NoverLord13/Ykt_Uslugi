@@ -75,3 +75,4 @@ class Service(Base):
         order_by="ServiceImage.position",
     )
     owner = relationship("User", back_populates="services")
+    responses = relationship("ServiceResponse", back_populates="service", cascade="all, delete-orphan")
