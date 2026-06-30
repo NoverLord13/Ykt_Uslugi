@@ -115,14 +115,15 @@ export const Home = () => {
 
     return (
         <div className="mx-auto max-w-7xl p-4 pb-16 sm:p-6">
-            <section className="relative mb-8 overflow-hidden rounded-[32px] border border-purple-100 bg-gradient-to-br from-white via-[#f7f2ff] to-[#fff0ea] px-5 py-10 shadow-[0_22px_70px_rgb(80_50_130/0.10)] sm:px-10 sm:py-14">
-                <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-[var(--accent)]/15 blur-3xl" />
+            <section className="relative mb-8 overflow-hidden rounded-[32px] border border-[#f1ddd5] bg-[#fff7f2] px-5 py-10 shadow-[0_18px_55px_rgb(44_54_68/0.08)] sm:px-10 sm:py-14">
+                <div className="absolute -right-12 -top-20 h-56 w-56 rounded-full bg-[#dceafe]" />
+                <div className="absolute -bottom-24 right-36 h-48 w-48 rounded-full bg-[#ffe1d7]" />
                 <div className="relative max-w-3xl">
                     <p className="eyebrow">Люди помогают людям</p>
                     <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-[-.045em] text-[var(--ink)] sm:text-6xl">Нужный человек<br className="hidden sm:block" /> найдётся рядом</h1>
                     <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-lg">Проверенные сделки, живые профили и местные специалисты — чтобы от задачи до результата было меньше лишних шагов.</p>
 
-                    <form onSubmit={handleSearchSubmit} className="mt-7 flex max-w-2xl flex-col gap-2 rounded-2xl border border-white bg-white/95 p-2 shadow-xl shadow-purple-100/70 sm:flex-row">
+                    <form onSubmit={handleSearchSubmit} className="mt-7 flex max-w-2xl flex-col gap-2 rounded-2xl border border-[#e7e9ec] bg-white p-2 shadow-xl shadow-slate-200/60 sm:flex-row">
                         <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
                             <span className="text-lg text-[#8A8F99]">⌕</span>
                             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Какую услугу вы ищете?" className="min-h-11 w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
@@ -259,7 +260,7 @@ export const Home = () => {
                                 <article
                                     key={ad.id}
                                     onClick={() => navigate(`/services/${ad.id}`)}
-                                    className="group cursor-pointer overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_10px_35px_rgb(55_38_91/0.06)] transition duration-300 hover:-translate-y-1 hover:border-purple-200 hover:shadow-[0_20px_55px_rgb(75_45_120/0.14)]"
+                                    className="group cursor-pointer overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_10px_35px_rgb(23_34_52/0.06)] transition duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-[0_20px_50px_rgb(23_34_52/0.12)]"
                                 >
                                     <div className="aspect-[4/3] overflow-hidden bg-[#F2F3F5]">
                                         {(ad.image_url || ad.images[0]?.url) ? (

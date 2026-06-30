@@ -40,7 +40,7 @@ export const Header = () => {
     <header className="sticky top-0 z-40 w-full border-b border-[var(--line)] bg-white/85 backdrop-blur-xl">
       <nav className="mx-auto flex min-h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5 text-xl font-black tracking-tight text-[var(--ink)]">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--brand)] to-[#a678ff] text-sm text-white shadow-md shadow-purple-200">Y</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--brand)] text-sm text-white shadow-md shadow-orange-200">Y</span>
           <span>Ykt<span className="text-[var(--accent)]">.</span>Услуги</span>
         </Link>
 

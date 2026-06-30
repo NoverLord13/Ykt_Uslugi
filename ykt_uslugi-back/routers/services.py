@@ -107,6 +107,10 @@ def list_my_services(current_user: User = Depends(get_current_user), db: Session
         .order_by(Service.created_at.desc())
         .all()
     )
+    return ApiResponse(
+        message="Ваши услуги",
+        data=[_to_service_read(s) for s in services],
+    )
 
 
 @router.get("/manage/{service_id}", response_model=ApiResponse[ServiceRead])
@@ -117,10 +121,6 @@ def get_my_service(service_id: int, current_user: User = Depends(get_current_use
     if not service:
         raise HTTPException(status_code=404, detail="Объявление не найдено или принадлежит другому пользователю")
     return ApiResponse(message="Объявление владельца", data=_to_service_read(service))
-    return ApiResponse(
-        message="Ваши услуги",
-        data=[_to_service_read(s) for s in services],
-    )
 
 @router.get("/{service_id}", response_model=ApiResponse[ServiceRead])
 def get_service(service_id: int, current_user: User | None = Depends(get_optional_user), db: Session = Depends(get_db)):

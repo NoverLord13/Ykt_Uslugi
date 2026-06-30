@@ -5,7 +5,7 @@ import { Modal } from '../components/Modal';
 
 const statusMeta: Record<AdBlock['status'], { label: string; className: string }> = {
   active: { label: 'Опубликовано', className: 'bg-[#dff8ee] text-[#157354]' }, hidden: { label: 'Скрыто', className: 'bg-[#f1eef3] text-[#746d80]' },
-  moderation: { label: 'На проверке', className: 'bg-[#fff3dc] text-[#9a5b00]' }, closed: { label: 'Закрыто', className: 'bg-[#eeeaff] text-[#5c3bdd]' },
+  moderation: { label: 'На проверке', className: 'bg-[#fff3dc] text-[#9a5b00]' }, closed: { label: 'Закрыто', className: 'bg-[#e7f0ff] text-[#245ca8]' },
 };
 type Filter = 'all' | AdBlock['status'];
 

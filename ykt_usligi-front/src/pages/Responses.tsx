@@ -5,7 +5,7 @@ import { ReviewModal } from '../components/FeedbackModals';
 
 const statusMeta: Record<ServiceResponse['status'], { label: string; className: string; hint: string }> = {
   new: { label: 'Ждёт решения', className: 'bg-[#fff3dc] text-[#9a5b00]', hint: 'Отклик отправлен, решение ещё не принято' },
-  accepted: { label: 'В работе', className: 'bg-[#eeeaff] text-[#5c3bdd]', hint: 'Исполнитель выбран, работа идёт' },
+  accepted: { label: 'В работе', className: 'bg-[#e7f0ff] text-[#245ca8]', hint: 'Исполнитель выбран, работа идёт' },
   completed: { label: 'Выполнено', className: 'bg-[#dff8ee] text-[#157354]', hint: 'Сделка успешно завершена' },
   cancelled: { label: 'Отменено', className: 'bg-[#f1eef3] text-[#746d80]', hint: 'Сделка отменена одним из участников' },
   declined: { label: 'Не выбран', className: 'bg-[#fff0f3] text-[#b42f49]', hint: 'Заказчик выбрал другого исполнителя' },
