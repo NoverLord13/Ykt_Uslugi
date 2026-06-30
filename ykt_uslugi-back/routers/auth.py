@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -42,6 +44,8 @@ def register_verify_code(body: VerifyCodeRequest):
 
 @router.post("/register/complete", response_model=ApiResponse[TokenData])
 def register_complete(body: RegisterCompleteRequest, db: Session = Depends(get_db)):
+    if not body.accept_terms:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Необходимо принять условия использования")
     phone = decode_verification_token(body.verification_token)
     if not phone:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Недействительный или просроченный токен")
@@ -59,6 +63,7 @@ def register_complete(body: RegisterCompleteRequest, db: Session = Depends(get_d
         username=body.username,
         phone_number=phone,
         hashed_password=hash_password(body.password),
+        legal_accepted_at=datetime.now(timezone.utc),
     )
     db.add(user)
     db.commit()
@@ -134,4 +139,3 @@ def login_phone_verify(body: VerifyCodeRequest, db: Session = Depends(get_db)):
             user=UserRead.model_validate(user),
         ),
     )
-

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/Button';
 import {
     api,
     fileUrl,
@@ -19,7 +18,7 @@ type SortMode = NonNullable<ServiceFilters['sort']>;
 const LIMIT = 12;
 
 export const Home = () => {
-    const isAuthenticated = !!getToken();
+    const [isAuthenticated, setIsAuthenticated] = useState(!!getToken());
     const navigate = useNavigate();
 
     const [ads, setAds] = useState<AdBlock[]>([]);
@@ -37,6 +36,16 @@ export const Home = () => {
     const [error, setError] = useState('');
 
     const selectedCategory = categories.find((category) => String(category.id) === categoryId);
+
+    useEffect(() => {
+        const updateAuth = () => setIsAuthenticated(!!getToken());
+        window.addEventListener('auth-change', updateAuth);
+        window.addEventListener('storage', updateAuth);
+        return () => {
+            window.removeEventListener('auth-change', updateAuth);
+            window.removeEventListener('storage', updateAuth);
+        };
+    }, []);
 
     useEffect(() => {
         api.getCategories()
@@ -99,38 +108,43 @@ export const Home = () => {
         setSort('newest');
     };
 
-    return (
-        <div className="mx-auto max-w-7xl p-4 sm:p-6">
-            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-4xl font-bold text-black">Uslugi Ykt</h1>
-                    <p className="mt-1 text-[#8A8F99]">Объявления услуг и запросов в Якутске</p>
-                </div>
+    const handleAddService = () => {
+        if (isAuthenticated) navigate('/adadder');
+        else navigate('/login', { state: { from: '/adadder' } });
+    };
 
-                <div className="flex flex-wrap gap-3">
-                    {isAuthenticated && (
-                        <Button size="middle" color="primary" title="Мои объявления" onClick={() => navigate('/my-ads')} />
-                    )}
-                    <Button size="middle" color="primary" title="Добавить объявление" onClick={() => navigate('/adadder')} />
+    return (
+        <div className="mx-auto max-w-7xl p-4 pb-16 sm:p-6">
+            <section className="relative mb-8 overflow-hidden rounded-[32px] border border-[#f1ddd5] bg-[#fff7f2] px-5 py-10 shadow-[0_18px_55px_rgb(44_54_68/0.08)] sm:px-10 sm:py-14">
+                <div className="absolute -right-12 -top-20 h-56 w-56 rounded-full bg-[#dceafe]" />
+                <div className="absolute -bottom-24 right-36 h-48 w-48 rounded-full bg-[#ffe1d7]" />
+                <div className="relative max-w-3xl">
+                    <p className="eyebrow">Люди помогают людям</p>
+                    <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-[-.045em] text-[var(--ink)] sm:text-6xl">Нужный человек<br className="hidden sm:block" /> найдётся рядом</h1>
+                    <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-lg">Проверенные сделки, живые профили и местные специалисты — чтобы от задачи до результата было меньше лишних шагов.</p>
+
+                    <form onSubmit={handleSearchSubmit} className="mt-7 flex max-w-2xl flex-col gap-2 rounded-2xl border border-[#e7e9ec] bg-white p-2 shadow-xl shadow-slate-200/60 sm:flex-row">
+                        <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
+                            <span className="text-lg text-[#8A8F99]">⌕</span>
+                            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Какую услугу вы ищете?" className="min-h-11 w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
+                        </label>
+                        <button type="submit" className="button-primary px-7">Найти</button>
+                    </form>
+
+                    <div className="mt-5 flex flex-wrap gap-3">
+                        <button type="button" onClick={handleAddService} className="button-secondary">＋ Добавить объявление</button>
+                        {isAuthenticated && <button type="button" onClick={() => navigate('/my-ads')} className="button-quiet">Мои объявления →</button>}
+                    </div>
                 </div>
-            </div>
+            </section>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-                <aside className="h-fit rounded-2xl border border-[#E1E4EA] bg-white p-4 text-black shadow-sm lg:sticky lg:top-6">
+                <aside className="surface h-fit p-5 text-black lg:sticky lg:top-24">
                     <form className="space-y-5" onSubmit={handleSearchSubmit}>
-                        <div>
-                            <h2 className="text-lg font-bold text-[#1A1A1A]">Фильтры</h2>
+                        <div className="flex items-center justify-between">
+                            <div><h2 className="text-lg font-bold text-[#1A1A1A]">Фильтры</h2><p className="text-xs text-[#8A8F99]">Уточните результаты</p></div>
+                            <button type="button" onClick={clearFilters} className="text-xs font-semibold text-[#2F6FED] hover:underline">Сбросить</button>
                         </div>
-
-                        <label className="block">
-                            <span className="mb-1 block text-sm font-semibold text-slate-700">Поиск</span>
-                            <input
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                                placeholder="Например: сантехник"
-                                className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 text-sm outline-none focus:border-[#2F6FED]"
-                            />
-                        </label>
 
                         <div>
                             <h3 className="mb-2 text-sm font-semibold text-slate-700">Тип объявления</h3>
@@ -219,22 +233,26 @@ export const Home = () => {
                         </label>
 
                         <div className="flex gap-2">
-                            <button type="submit" className="flex-1 rounded-xl bg-[#2F6FED] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245DCC]">
+                            <button type="submit" className="flex-1 rounded-xl bg-[#2F6FED] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#245DCC]">
                                 Найти
-                            </button>
-                            <button type="button" onClick={clearFilters} className="rounded-xl border border-[#E1E4EA] px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#F2F3F5]">
-                                Сброс
                             </button>
                         </div>
                     </form>
                 </aside>
 
-                <main>
+                <main className="min-w-0">
+                    <div className="mb-4 flex items-end justify-between gap-4">
+                        <div><h2 className="text-2xl font-bold text-[#1A1A1A]">Объявления</h2><p className="text-sm text-[#8A8F99]">Актуальные предложения и запросы</p></div>
+                        {ads.length > 0 && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#667085] shadow-sm">Показано: {ads.length}</span>}
+                    </div>
                     {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-600">{error}</div>}
 
                     {ads.length === 0 && !isLoading ? (
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center text-[#8A8F99]">
-                            Пока нет объявлений по выбранным фильтрам
+                        <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-20 text-center">
+                            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EEF4FF] text-2xl">⌕</div>
+                            <h3 className="font-bold text-[#1A1A1A]">Ничего не найдено</h3>
+                            <p className="mt-1 text-sm text-[#8A8F99]">Попробуйте изменить фильтры или создайте новое объявление.</p>
+                            <button type="button" onClick={handleAddService} className="mt-5 rounded-xl bg-[#2F6FED] px-5 py-2.5 text-sm font-semibold text-white">Добавить объявление</button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -242,7 +260,7 @@ export const Home = () => {
                                 <article
                                     key={ad.id}
                                     onClick={() => navigate(`/services/${ad.id}`)}
-                                    className="group cursor-pointer overflow-hidden rounded-2xl border border-[#E1E4EA] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                                    className="group cursor-pointer overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_10px_35px_rgb(23_34_52/0.06)] transition duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-[0_20px_50px_rgb(23_34_52/0.12)]"
                                 >
                                     <div className="aspect-[4/3] overflow-hidden bg-[#F2F3F5]">
                                         {(ad.image_url || ad.images[0]?.url) ? (
@@ -256,16 +274,19 @@ export const Home = () => {
                                         )}
                                     </div>
 
-                                    <div className="space-y-3 p-4">
+                                    <div className="p-4">
                                         <div className="flex flex-wrap gap-2">
                                             <span className="rounded-full bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#2F6FED]">
                                                 {listingTypeLabel(ad.listing_type)}
                                             </span>
                                             {ad.category && <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-xs text-slate-600">{ad.category.name}</span>}
                                         </div>
-                                        <h3 className="line-clamp-2 min-h-12 font-bold text-[#1A1A1A]">{ad.title}</h3>
-                                        <p className="text-lg font-bold text-[#2F6FED]">{formatPrice(ad)}</p>
-                                        {ad.location && <p className="text-sm text-[#8A8F99]">{ad.location}</p>}
+                                        <h3 className="mt-3 line-clamp-2 min-h-12 font-bold leading-6 text-[#1A1A1A] transition-colors group-hover:text-[#2F6FED]">{ad.title}</h3>
+                                        <p className="mt-2 text-lg font-black text-[#1A1A1A]">{formatPrice(ad)}</p>
+                                        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-[#8A8F99]">
+                                            <span className="truncate">{ad.owner.display_name || ad.owner.username}</span>
+                                            <span className="truncate pl-3">{ad.location || 'Якутск'}</span>
+                                        </div>
                                     </div>
                                 </article>
                             ))}

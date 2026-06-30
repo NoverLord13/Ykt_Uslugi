@@ -23,6 +23,7 @@ class UserRead(BaseModel):
     bio: str | None = None
     avatar_url: str | None = None
     location: str | None = None
+    telegram_username: str | None = None
     is_admin: bool
     is_active: bool
     created_at: datetime
@@ -35,6 +36,7 @@ class UserBrief(BaseModel):
     username: str
     display_name: str | None = None
     avatar_url: str | None = None
+    telegram_username: str | None = None
 
 
 class TokenData(BaseModel):
@@ -80,14 +82,31 @@ class ReviewRead(BaseModel):
     author: UserBrief
     target_user: UserBrief
     service_id: int | None = None
+    response_id: int | None = None
     rating: int
     text: str | None = None
     created_at: datetime
 
 
-class UserProfileRead(UserRead):
+class UserProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    display_name: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
+    location: str | None = None
+    telegram_username: str | None = None
+    created_at: datetime
     rating_avg: float | None = None
     reviews_count: int = 0
+
+
+class CurrentUserProfileRead(UserProfileRead):
+    phone_number: str
+    is_admin: bool
+    is_active: bool
 
 
 class ServiceRead(BaseModel):
@@ -96,7 +115,7 @@ class ServiceRead(BaseModel):
     id: int
     title: str
     description: str
-    price: Decimal
+    price: Decimal | None
     listing_type: str
     category: CategoryRead | None = None
     subcategory: SubcategoryRead | None = None

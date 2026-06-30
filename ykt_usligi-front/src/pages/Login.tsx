@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ApiError,
 } from "../api/client";
@@ -27,6 +27,8 @@ export const Login = () => {
   
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const destination = (location.state as { from?: string } | null)?.from || '/';
 
   const handleSendCode = async () => {
       setError("");
@@ -51,7 +53,7 @@ export const Login = () => {
       }
       saveToken(response.data.access_token);
       window.dispatchEvent(new Event('auth-change'));
-      navigate("/");
+      navigate(destination, { replace: true });
     } catch (e) {
       setError(getApiErrorMessage(e, e instanceof ApiError ? e.message : "Неверный код"));
     } finally {
@@ -68,6 +70,7 @@ export const Login = () => {
       return;
     }
 
+    setLoading(true);
     try {
       const data = await login(username.trim(), password);
       if (!data.data?.access_token) {
@@ -77,31 +80,35 @@ export const Login = () => {
       saveToken(data.data.access_token);
       window.dispatchEvent(new Event('auth-change'));
 
-      navigate('/');
+      navigate(destination, { replace: true });
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError(getApiErrorMessage(err, 'Неверный логин или пароль'));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white border border-slate-800 rounded-2xl p-8 shadow-2xl text-slate-200">
+    <div className="relative flex min-h-[calc(100vh-10rem)] items-center justify-center overflow-hidden px-4 py-10">
+      <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2F6FED]/10 blur-3xl" />
+      <div className="relative w-full max-w-md rounded-3xl border border-[#E1E4EA] bg-white p-6 shadow-xl shadow-slate-200/70 sm:p-8">
         
-        <h2 className="text-3xl font-bold text-center text-white mb-2">Авторизация</h2>
-        <p className="text-slate-400 text-center text-sm mb-6">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF4FF] font-black text-[#2F6FED]">Y</div>
+        <h2 className="mb-2 text-center text-3xl font-black text-[#1A1A1A]">Добро пожаловать</h2>
+        <p className="mb-6 text-center text-sm text-[#8A8F99]">
           Войдите в свой аккаунт
         </p>
 
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg text-center mb-4">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-center text-sm text-red-600">
             {error}
           </div>
         )}
 
         {/* Выбор входа: по номеру телефона или по логину с паролем */}
-        <div className="flex justify-between gap-1 items-center mb-6 bg-gray-300 rounded-2xl p-1">
+        <div className="mb-6 flex items-center justify-between gap-1 rounded-2xl bg-[#F2F3F5] p-1">
             <Button
               color={switcher? "secondary" : "third" } 
               size="middle"
@@ -120,7 +127,7 @@ export const Login = () => {
         {switcher === false &&(
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Имя пользователя:</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Имя пользователя</label>
               <div className="w-full">
                 <Input
                   type="text"
@@ -134,7 +141,7 @@ export const Login = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Пароль:</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Пароль</label>
               <div className="w-full">
                 <Input
                   type="password"
@@ -150,7 +157,7 @@ export const Login = () => {
               <Button
                 color="primary"
                 size="large"
-                title="Войти"
+                title={loading ? "Вход..." : "Войти"}
                 onClick={handleLogin}
               />
             </div>
@@ -160,10 +167,6 @@ export const Login = () => {
         
         {switcher ===true &&(
             <div className="space-y-4">
-                {error && (
-                  <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm">{error}</div>
-                )}
-
                 {step === "phone" && (
                   <div className="space-y-4">
                     <input
@@ -215,9 +218,9 @@ export const Login = () => {
 
         
 
-        <p className="mt-6 text-center text-sm text-slate-400">
+        <p className="mt-6 text-center text-sm text-[#8A8F99]">
           Ещё нет аккаунта?{' '}
-          <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+          <Link to="/register" className="font-semibold text-[#2F6FED] transition-colors hover:text-[#245DCC]">
             Зарегистрироваться
           </Link>
         </p>

@@ -34,6 +34,7 @@ export interface UserBrief {
   username: string;
   display_name?: string | null;
   avatar_url?: string | null;
+  telegram_username?: string | null;
 }
 
 export interface UserProfile extends UserBrief {
@@ -45,6 +46,7 @@ export interface UserProfile extends UserBrief {
   created_at?: string;
   rating_avg?: number | null;
   reviews_count?: number;
+  telegram_username?: string | null;
 }
 
 export interface Review {
@@ -52,6 +54,7 @@ export interface Review {
   author: UserBrief;
   target_user: UserBrief;
   service_id: number | null;
+  response_id: number | null;
   rating: number;
   text: string | null;
   created_at: string;
@@ -61,7 +64,7 @@ export interface AdBlock {
   id: number;
   title: string;
   description: string;
-  price: number;
+  price: number | null;
   listing_type: 'offer' | 'request';
   category: Category | null;
   subcategory: Subcategory | null;
@@ -93,12 +96,40 @@ export interface UserProfileUpdate {
   display_name?: string;
   bio?: string;
   location?: string;
+  telegram_username?: string;
 }
 
 export interface ReviewCreate {
-  service_id?: number;
+  response_id: number;
   rating: number;
   text?: string;
+}
+
+export interface ServiceResponse {
+  id: number;
+  service: { id: number; title: string; listing_type: 'offer' | 'request'; owner: UserBrief };
+  respondent: UserBrief;
+  message: string | null;
+  status: 'new' | 'accepted' | 'completed' | 'cancelled' | 'declined';
+  created_at: string;
+  updated_at: string;
+  can_accept: boolean;
+  can_complete: boolean;
+  can_cancel: boolean;
+  can_review: boolean;
+  review_left: boolean;
+}
+
+export interface Report {
+  id: number;
+  reporter: UserBrief;
+  target_type: 'service' | 'user' | 'review';
+  target_id: number;
+  reason: string;
+  comment: string | null;
+  status: 'new' | 'reviewed' | 'resolved' | 'rejected';
+  created_at: string;
+  updated_at: string;
 }
 
 const authHeaders = () => {
@@ -145,8 +176,9 @@ export const fileUrl = (path?: string | null) => {
 
 export const formatPrice = (ad: Pick<AdBlock, 'price' | 'price_type'>) => {
   if (ad.price_type === 'negotiable') return 'Цена договорная';
-  if (ad.price_type === 'from') return `от ${ad.price} руб.`;
-  return `${ad.price} руб.`;
+  const value = new Intl.NumberFormat('ru-RU').format(ad.price ?? 0);
+  if (ad.price_type === 'from') return `от ${value} ₽`;
+  return `${value} ₽`;
 };
 
 export const listingTypeLabel = (type: AdBlock['listing_type']) =>
@@ -161,7 +193,7 @@ export const api = {
   },
 
   getAdBlockById: async (id: number): Promise<AdBlock> => {
-    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/${id}`);
+    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
@@ -176,6 +208,11 @@ export const api = {
     const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/services/mine`, {
       headers: authHeaders(),
     });
+    return unwrap(response);
+  },
+
+  getMyAdBlockById: async (id: number): Promise<AdBlock> => {
+    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/manage/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
@@ -252,6 +289,70 @@ export const api = {
     const response = await axios.post<ApiResponse<Review>>(`${API_URL}/users/${userId}/reviews`, body, {
       headers: authHeaders(),
     });
+    return unwrap(response);
+  },
+
+  createResponse: async (serviceId: number, message: string): Promise<ServiceResponse> => {
+    const response = await axios.post<ApiResponse<ServiceResponse>>(`${API_URL}/services/${serviceId}/responses`, { message }, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  getSentResponses: async (): Promise<ServiceResponse[]> => {
+    const response = await axios.get<ApiResponse<ServiceResponse[]>>(`${API_URL}/responses/sent`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  getReceivedResponses: async (): Promise<ServiceResponse[]> => {
+    const response = await axios.get<ApiResponse<ServiceResponse[]>>(`${API_URL}/responses/received`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  updateResponse: async (id: number, status: 'accepted' | 'completed' | 'cancelled' | 'declined'): Promise<ServiceResponse> => {
+    const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/responses/${id}`, { status }, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  createReport: async (targetType: 'service' | 'user' | 'review', targetId: number, reason: string, comment?: string): Promise<Report> => {
+    const response = await axios.post<ApiResponse<Report>>(`${API_URL}/reports`, { target_type: targetType, target_id: targetId, reason, comment: comment || null }, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminGetUsers: async (): Promise<UserProfile[]> => {
+    const response = await axios.get<ApiResponse<UserProfile[]>>(`${API_URL}/admin/users`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminUpdateUser: async (id: number, body: { is_active?: boolean; is_admin?: boolean }): Promise<UserProfile> => {
+    const response = await axios.patch<ApiResponse<UserProfile>>(`${API_URL}/admin/users/${id}`, body, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminGetServices: async (): Promise<AdBlock[]> => {
+    const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/admin/services`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminUpdateService: async (id: number, status: AdBlock['status']): Promise<AdBlock> => {
+    const response = await axios.patch<ApiResponse<AdBlock>>(`${API_URL}/admin/services/${id}`, { status }, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminGetReports: async (): Promise<Report[]> => {
+    const response = await axios.get<ApiResponse<Report[]>>(`${API_URL}/admin/reports`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminGetReviews: async (): Promise<Review[]> => {
+    const response = await axios.get<ApiResponse<Review[]>>(`${API_URL}/admin/reviews`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminDeleteReview: async (id: number): Promise<void> => {
+    await axios.delete(`${API_URL}/admin/reviews/${id}`, { headers: authHeaders() });
+  },
+
+  adminUpdateReport: async (id: number, status: 'reviewed' | 'resolved' | 'rejected'): Promise<Report> => {
+    const response = await axios.patch<ApiResponse<Report>>(`${API_URL}/admin/reports/${id}`, { status }, { headers: authHeaders() });
     return unwrap(response);
   },
 };

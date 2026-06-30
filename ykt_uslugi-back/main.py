@@ -5,10 +5,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from core.config import UPLOAD_DIR
-from database import Base, engine, seed_categories  # <--- Добавили импорт Base и engine
-from models import review, service, user
-from routers import admin, auth, categories, services, users
+from core.config import CORS_ORIGINS, UPLOAD_DIR
+from database import seed_categories
+from models import response, review, service, user
+from routers import admin, auth, categories, responses, services, users
 
 # Создание папки для загрузок
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
@@ -17,10 +17,7 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 # Контекстный менеджер, который срабатывает строго ОДИН раз при запуске сервера
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Автоматически создаем все таблицы в SQLite, если их еще нет в файле БД
-    Base.metadata.create_all(bind=engine)
-    
-    # Теперь таблицы гарантированно существуют, наполнение сработает без ошибок
+    # Схема создаётся Alembic-миграциями до запуска приложения.
     seed_categories()
     yield
 
@@ -30,7 +27,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,6 +38,7 @@ app.include_router(auth.router)
 app.include_router(categories.router)
 app.include_router(services.router)
 app.include_router(users.router)
+app.include_router(responses.router)
 app.include_router(admin.router)
 
 

@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from core.config import DATABASE_URL
 from database import Base
-from models import review, service, user
+from models import response, review, service, user
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

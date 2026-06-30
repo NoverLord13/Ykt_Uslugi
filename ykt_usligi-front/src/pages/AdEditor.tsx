@@ -39,12 +39,12 @@ export const AdEditor = () => {
       try {
         const [categoriesData, ad] = await Promise.all([
           api.getCategories(),
-          api.getAdBlockById(serviceId),
+          api.getMyAdBlockById(serviceId),
         ]);
         setCategories(categoriesData);
         setTitle(ad.title);
         setDescription(ad.description);
-        setPrice(String(ad.price));
+        setPrice(ad.price == null ? '' : String(ad.price));
         setListingType(ad.listing_type);
         setCategoryId(ad.category ? String(ad.category.id) : '');
         setSubcategoryId(ad.subcategory ? String(ad.subcategory.id) : '');
@@ -75,23 +75,26 @@ export const AdEditor = () => {
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !description.trim() || !price.trim()) {
-      setError('Заполните название, описание и цену');
+    if (!title.trim() || !description.trim() || (priceType !== 'negotiable' && (!price.trim() || Number(price) <= 0))) {
+      setError('Заполните название, описание и корректную цену или выберите договорную');
       return;
     }
 
     const formData = new FormData();
     formData.append('title', title.trim());
     formData.append('description', description.trim());
-    formData.append('price', price);
+    if (priceType !== 'negotiable') formData.append('price', price);
     formData.append('listing_type', listingType);
     formData.append('price_type', priceType);
     formData.append('status', statusValue);
     if (categoryId) formData.append('category_id', categoryId);
+    else formData.append('clear_category', 'true');
     if (subcategoryId) formData.append('subcategory_id', subcategoryId);
+    else formData.append('clear_subcategory', 'true');
     formData.append('location', location.trim());
     formData.append('contact_phone', contactPhone.trim());
     files.forEach((file) => formData.append('images', file));
+    if (existingImages.length === 0 && files.length === 0) formData.append('clear_images', 'true');
 
     setIsSaving(true);
     setError('');
@@ -161,7 +164,7 @@ export const AdEditor = () => {
           </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Цена" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
+            {priceType === 'negotiable' ? <div className="rounded-xl bg-[var(--brand-soft)] px-4 py-3 text-sm text-[var(--brand-dark)]">Стоимость будет согласована в переписке</div> : <input type="number" min="1" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Цена" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[var(--brand)]" />}
             <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Локация" className="rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
           </div>
 
@@ -176,7 +179,17 @@ export const AdEditor = () => {
             </select>
           </div>
 
-          <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Контактный телефон" className="w-full rounded-xl border border-[#E1E4EA] px-3 py-2 outline-none focus:border-[#2F6FED]" />
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold text-[#1A1A1A]">Контактный телефон</span>
+            <input
+              type="tel"
+              value={contactPhone}
+              disabled
+              readOnly
+              className="w-full rounded-xl border border-[#E1E4EA] bg-[#F2F3F5] px-3 py-2 text-[#8A8F99] outline-none cursor-not-allowed"
+            />
+            <span className="mt-1 block text-xs text-[#8A8F99]">Номер телефона привязан к профилю создателя и не может быть изменен.</span>
+          </label>
 
           {existingImages.length > 0 && files.length === 0 && (
             <div>
@@ -186,10 +199,11 @@ export const AdEditor = () => {
               </div>
             </div>
           )}
+          {existingImages.length > 0 && files.length === 0 && <button type="button" onClick={() => setExistingImages([])} className="text-sm text-red-600 hover:underline">Удалить текущие фото</button>}
 
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-[#1A1A1A]">Заменить фото</span>
-            <input type="file" accept="image/*" multiple onChange={handleFileChange} className="block w-full text-sm" />
+            <input type="file" accept=".jpg,.jpeg,.png,.webp,.gif" multiple onChange={handleFileChange} className="block w-full text-sm" />
           </label>
         </div>
 
