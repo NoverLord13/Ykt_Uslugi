@@ -1,0 +1,46 @@
+name: ykt-uslugi
+
+services:
+  backend:
+    build:
+      context: ./ykt_uslugi-back
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      SECRET_KEY: ${SECRET_KEY:-docker-local-secret-change-before-production}
+      DATABASE_URL: sqlite:////data/app.db
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      SMS_CODE_TTL_SECONDS: ${SMS_CODE_TTL_SECONDS:-300}
+      SMS_RESEND_COOLDOWN_SECONDS: ${SMS_RESEND_COOLDOWN_SECONDS:-60}
+      VERIFICATION_TOKEN_EXPIRE_MINUTES: ${VERIFICATION_TOKEN_EXPIRE_MINUTES:-15}
+      UPLOAD_DIR: /data/uploads
+      CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-5173}
+    volumes:
+      - backend_data:/data
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    init: true
+
+  frontend:
+    build:
+      context: ./ykt_uslugi-front
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    restart: unless-stopped
+    init: true
+
+volumes:
+  backend_data:
