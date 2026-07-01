@@ -6,7 +6,7 @@
 
 | Часть | Каталог | Технологии | Локальный адрес |
 | --- | --- | --- | --- |
-| Web-клиент | `ykt_usligi-front` | React 19, TypeScript, Vite 8, Tailwind CSS 4 | `http://localhost:5173` |
+| Web-клиент | `ykt_uslugi-front` | React 19, TypeScript, Vite 8, Tailwind CSS 4 | `http://localhost:5173` |
 | API | `ykt_uslugi-back` | FastAPI, SQLAlchemy 2, Alembic, SQLite | `http://localhost:8000` |
 
 ## Возможности
@@ -24,7 +24,79 @@
 - структурированные жалобы и интерфейс модератора;
 - адаптивный marketplace-интерфейс для desktop и mobile.
 
-## Быстрый запуск
+## Быстрый запуск через Docker
+
+Это рекомендуемый способ локального запуска. Требуются Docker Desktop либо Docker Engine с Compose v2.
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+```
+
+После запуска:
+
+- приложение: `http://localhost:5173`;
+- API напрямую: `http://localhost:8000`;
+- Swagger: `http://localhost:8000/docs`.
+
+Миграции Alembic применяются автоматически перед запуском backend. Код development-SMS можно посмотреть так:
+
+```bash
+docker compose logs -f backend
+```
+
+Полезные команды:
+
+```bash
+# Состояние контейнеров
+docker compose ps
+
+# Логи всех сервисов
+docker compose logs -f
+
+# Пересобрать после изменения зависимостей или frontend
+docker compose up --build -d
+
+# Остановить, сохранив базу и изображения
+docker compose down
+
+# Проверить миграцию
+docker compose exec backend alembic current
+```
+
+SQLite и изображения хранятся в named volume `ykt-uslugi_backend_data` и сохраняются после `docker compose down`. Команда `docker compose down -v` удалит volume вместе со всеми локальными данными.
+
+Docker использует собственную базу в volume и не подхватывает автоматически локальный файл `ykt_uslugi-back/app.db`, созданный при запуске без контейнеров.
+
+### Как устроены контейнеры
+
+```text
+Browser :5173
+      │
+      ▼
+Frontend (Nginx + React SPA)
+      │ /api/*
+      ▼
+Backend (FastAPI :8000)
+      │
+      ▼
+Volume /data
+├── app.db
+└── uploads/
+```
+
+Nginx отдаёт SPA и проксирует `/api/*` во внутренний сервис `backend`. Поэтому запросы браузера являются same-origin и для обычной работы Docker-версии CORS не требуется.
+
+Порты, секрет и TTL настраиваются в корневом `.env`:
+
+```env
+FRONTEND_PORT=5173
+BACKEND_PORT=8000
+ENVIRONMENT=development
+SECRET_KEY=replace-with-a-long-random-secret
+```
+
+## Запуск без Docker
 
 ### 1. Backend
 
@@ -52,7 +124,7 @@ Backend необходимо запускать из каталога `ykt_uslug
 Требуется Node.js 20.19+ и npm.
 
 ```bash
-cd ykt_usligi-front
+cd ykt_uslugi-front
 npm install
 cp .env.example .env
 npm run dev
@@ -177,7 +249,11 @@ new ──► accepted ──► work_submitted ──► completed
 Ykt_Uslugi/
 ├── README.md
 ├── PRODUCT_AUDIT.md
-├── ykt_usligi-front/
+├── docker-compose.yml
+├── .env.example
+├── ykt_uslugi-front/
+│   ├── Dockerfile
+│   ├── nginx.conf
 │   ├── src/
 │   │   ├── api/          # API-клиент, типы и токен
 │   │   ├── components/   # Header, Footer, Modal и guards
@@ -201,7 +277,7 @@ Ykt_Uslugi/
 Frontend:
 
 ```bash
-cd ykt_usligi-front
+cd ykt_uslugi-front
 npm run lint
 npm run build
 ```
@@ -240,3 +316,5 @@ alembic downgrade -1
 - Нет автоматизированных unit/e2e-тестов.
 
 Для production понадобятся PostgreSQL, объектное хранилище, реальный SMS-провайдер, rate limiting, мониторинг, резервное копирование и безопасное хранение секретов.
+
+Текущий Compose предназначен прежде всего для локального запуска и одного экземпляра backend. Для production необходимо настроить TLS, собственный `SECRET_KEY`, внешний reverse proxy, PostgreSQL и резервное копирование persistent data.

@@ -119,10 +119,8 @@ export const Home = () => {
                 <div className="absolute -right-12 -top-20 h-56 w-56 rounded-full bg-[#dceafe]" />
                 <div className="absolute -bottom-24 right-36 h-48 w-48 rounded-full bg-[#ffe1d7]" />
                 <div className="relative max-w-3xl">
-                    <p className="eyebrow">Люди помогают людям</p>
                     <h1 className="mt-4 text-4xl font-black leading-[1.04] tracking-[-.045em] text-[var(--ink)] sm:text-6xl">Нужный человек<br className="hidden sm:block" /> найдётся рядом</h1>
                     <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] sm:text-lg">Проверенные сделки, живые профили и местные специалисты — чтобы от задачи до результата было меньше лишних шагов.</p>
-
                     <form onSubmit={handleSearchSubmit} className="mt-7 flex max-w-2xl flex-col gap-2 rounded-2xl border border-[#e7e9ec] bg-white p-2 shadow-xl shadow-slate-200/60 sm:flex-row">
                         <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
                             <span className="text-lg text-[#8A8F99]">⌕</span>

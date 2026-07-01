@@ -57,11 +57,11 @@ ykt_uslugi-back/uploads/*
 !ykt_uslugi-back/uploads/.gitkeep
 
 # Frontend (Vite / React)
-ykt_usligi-front/node_modules/
-ykt_usligi-front/dist/
-ykt_usligi-front/dist-ssr/
-ykt_usligi-front/build/
-ykt_usligi-front/*.local
+ykt_uslugi-front/node_modules/
+ykt_uslugi-front/dist/
+ykt_uslugi-front/dist-ssr/
+ykt_uslugi-front/build/
+ykt_uslugi-front/*.local
 
 # Logs
 *.log

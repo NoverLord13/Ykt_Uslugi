@@ -29,6 +29,31 @@ uvicorn main:app --reload
 - Swagger: `http://localhost:8000/docs`
 - OpenAPI: `http://localhost:8000/openapi.json`
 
+## Docker
+
+Из корня репозитория:
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose logs -f backend
+```
+
+Backend-образ перед каждым запуском выполняет `alembic upgrade head`, затем запускает один процесс Uvicorn на `0.0.0.0:8000`.
+
+В Compose используются:
+
+```text
+DATABASE_URL=sqlite:////data/app.db
+UPLOAD_DIR=/data/uploads
+```
+
+Каталог `/data` подключён к named volume, поэтому база и изображения переживают пересоздание контейнера. Для проверки миграции:
+
+```bash
+docker compose exec backend alembic current
+```
+
 ## Конфигурация
 
 | Переменная | По умолчанию | Назначение |

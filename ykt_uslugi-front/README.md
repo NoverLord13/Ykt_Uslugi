@@ -23,6 +23,16 @@ npm run dev
 
 Приложение откроется на `http://localhost:5173`.
 
+## Docker
+
+Из корня репозитория frontend запускается вместе с backend:
+
+```bash
+docker compose up --build -d
+```
+
+Образ собирается в два этапа: Node.js выполняет TypeScript/Vite build, затем статические файлы копируются в Nginx. В Docker-сборке `VITE_API_URL=/api`, а `nginx.conf` проксирует `/api/*` в контейнер FastAPI и поддерживает fallback React Router на `index.html`.
+
 ## Переменная окружения
 
 ```env
