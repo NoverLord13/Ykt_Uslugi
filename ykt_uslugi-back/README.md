@@ -122,10 +122,10 @@ SMS-код печатается в stdout и хранится в памяти п
 | GET | `/users/{id}` | public | публичный профиль |
 | GET | `/users/{id}/services` | public | активные объявления пользователя |
 | GET | `/users/{id}/reviews` | public | отзывы о пользователе |
-| POST | `/users/{id}/reviews` | performer | отзыв о заказчике после сделки |
+| POST | `/users/{id}/reviews` | participant | отзыв о второй стороне после сделки |
 | DELETE | `/users/reviews/{id}` | admin | удалить отзыв |
 
-Отзыв привязан к `response_id`. Создать его может только исполнитель завершённой сделки, только о заказчике и только один раз.
+Отзыв привязан к `response_id`. После завершения заказчик может один раз оценить исполнителя (`review_type=performer`), а исполнитель — заказчика (`review_type=customer`). Рейтинги ролей агрегируются отдельно.
 
 ### Отклики и сделки
 
@@ -136,9 +136,18 @@ SMS-код печатается в stdout и хранится в памяти п
 | GET | `/responses/received` | owner | отклики на собственные объявления |
 | PATCH | `/responses/{id}` | participant | изменить допустимый статус |
 
-Статусы: `new`, `accepted`, `completed`, `cancelled`, `declined`.
+Статусы: `new`, `accepted`, `work_submitted`, `revision_requested`, `disputed`, `completed`, `cancelled`, `declined`.
 
-Разрешённые действия вычисляются сервером и возвращаются в `ResponseRead`: `can_accept`, `can_complete`, `can_cancel`, `can_review`, `review_left`.
+Разрешённые действия вычисляются сервером и возвращаются в `ResponseRead`: `can_accept`, `can_submit_work`, `can_confirm`, `can_request_revision`, `can_dispute`, `can_cancel`, `can_review`, `review_left`.
+
+Исполнитель переводит сделку в `work_submitted`. Заказчик принимает результат, возвращает его на доработку с комментарием или открывает спор. Если в течение 72 часов спор не открыт, просроченная работа получает `completed` при следующем обращении к API сделок.
+
+Споры доступны администратору:
+
+| Метод | Endpoint | Назначение |
+| --- | --- | --- |
+| GET | `/admin/responses/disputed` | список открытых споров |
+| PATCH | `/admin/responses/{id}` | завершить, отменить или вернуть на доработку |
 
 ### Жалобы
 
@@ -183,8 +192,9 @@ alembic downgrade -1
 1. `202606170001` — базовая расширенная схема;
 2. `202606290001` — отклики, жалобы и privacy-поля;
 3. `202606290002` — повторные сделки, nullable-цена и структурированные жалобы.
+4. `202606300001` — приёмка заказчиком, споры, автозавершение и двусторонняя репутация.
 
-Head: `202606290002`.
+Head: `202606300001`.
 
 ## Структура
 

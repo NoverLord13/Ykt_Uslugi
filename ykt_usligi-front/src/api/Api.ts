@@ -46,6 +46,10 @@ export interface UserProfile extends UserBrief {
   created_at?: string;
   rating_avg?: number | null;
   reviews_count?: number;
+  performer_rating_avg?: number | null;
+  performer_reviews_count?: number;
+  customer_rating_avg?: number | null;
+  customer_reviews_count?: number;
   telegram_username?: string | null;
 }
 
@@ -56,6 +60,7 @@ export interface Review {
   service_id: number | null;
   response_id: number | null;
   rating: number;
+  review_type: 'performer' | 'customer';
   text: string | null;
   created_at: string;
 }
@@ -110,14 +115,23 @@ export interface ServiceResponse {
   service: { id: number; title: string; listing_type: 'offer' | 'request'; owner: UserBrief };
   respondent: UserBrief;
   message: string | null;
-  status: 'new' | 'accepted' | 'completed' | 'cancelled' | 'declined';
+  status: 'new' | 'accepted' | 'work_submitted' | 'revision_requested' | 'disputed' | 'completed' | 'cancelled' | 'declined';
+  status_note: string | null;
+  work_submitted_at: string | null;
+  completion_deadline: string | null;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
   can_accept: boolean;
-  can_complete: boolean;
+  can_submit_work: boolean;
+  can_confirm: boolean;
+  can_request_revision: boolean;
+  can_dispute: boolean;
   can_cancel: boolean;
   can_review: boolean;
   review_left: boolean;
+  review_target: UserBrief | null;
+  review_type: 'performer' | 'customer' | null;
 }
 
 export interface Report {
@@ -307,8 +321,18 @@ export const api = {
     return unwrap(response);
   },
 
-  updateResponse: async (id: number, status: 'accepted' | 'completed' | 'cancelled' | 'declined'): Promise<ServiceResponse> => {
-    const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/responses/${id}`, { status }, { headers: authHeaders() });
+  updateResponse: async (id: number, status: ServiceResponse['status'], note?: string): Promise<ServiceResponse> => {
+    const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/responses/${id}`, { status, note: note || null }, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminGetDisputedResponses: async (): Promise<ServiceResponse[]> => {
+    const response = await axios.get<ApiResponse<ServiceResponse[]>>(`${API_URL}/admin/responses/disputed`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  adminResolveResponse: async (id: number, status: 'completed' | 'cancelled' | 'revision_requested', note: string): Promise<ServiceResponse> => {
+    const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/admin/responses/${id}`, { status, note }, { headers: authHeaders() });
     return unwrap(response);
   },
 

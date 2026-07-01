@@ -360,7 +360,8 @@ def delete_service(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Можно удалять только свои услуги")
 
     active_deal = db.query(ServiceResponse.id).filter(
-        ServiceResponse.service_id == service.id, ServiceResponse.status == "accepted"
+        ServiceResponse.service_id == service.id,
+        ServiceResponse.status.in_(("accepted", "work_submitted", "revision_requested", "disputed")),
     ).first()
     if active_deal:
         raise HTTPException(status_code=409, detail="Нельзя удалить объявление с активной сделкой. Сначала завершите или отмените её")

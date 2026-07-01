@@ -32,8 +32,8 @@ export const ReportModal = ({ open, targetType, targetId, onClose, onSuccess }: 
   </Modal>;
 };
 
-export const ReviewModal = ({ open, responseId, targetUserId, performerName, onClose, onSuccess }: {
-  open: boolean; responseId: number; targetUserId: number; performerName: string; onClose: () => void; onSuccess: () => void;
+export const ReviewModal = ({ open, responseId, targetUserId, subjectName, subjectRole, onClose, onSuccess }: {
+  open: boolean; responseId: number; targetUserId: number; subjectName: string; subjectRole: 'performer' | 'customer'; onClose: () => void; onSuccess: () => void;
 }) => {
   const [rating, setRating] = useState(5); const [review, setReview] = useState(''); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
   const submit = async () => {
@@ -42,10 +42,29 @@ export const ReviewModal = ({ open, responseId, targetUserId, performerName, onC
     catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать отзыв')); }
     finally { setSaving(false); }
   };
-  return <Modal open={open} onClose={onClose} title={`Как всё прошло с ${performerName}?`} description="Ваш отзыв поможет другим исполнителям. Оценить заказчика можно один раз после завершения сделки.">
+  const description = subjectRole === 'performer' ? 'Ваш отзыв сформирует рейтинг исполнителя и поможет другим заказчикам.' : 'Ваш отзыв поможет исполнителям оценить надёжность заказчика.';
+  return <Modal open={open} onClose={onClose} title={`Как всё прошло с ${subjectName}?`} description={`${description} Отзыв можно оставить один раз.`}>
     <div className="flex justify-center gap-2" aria-label={`Оценка: ${rating} из 5`}>{[1,2,3,4,5].map((star) => <button key={star} type="button" onClick={() => setRating(star)} className={`star-button ${star <= rating ? 'star-active' : ''}`} aria-label={`${star} из 5`}>★</button>)}</div>
     <label className="field mt-6"><span>Расскажите подробнее <small>необязательно</small></span><textarea rows={5} maxLength={2000} value={review} onChange={(e) => setReview(e.target.value)} placeholder="Что понравилось? Всё ли было сделано в срок?" /></label>
     {error && <p className="form-error">{error}</p>}
     <div className="modal-actions"><button type="button" onClick={onClose} className="button-secondary">Позже</button><button type="button" disabled={saving} onClick={submit} className="button-primary">{saving ? 'Публикуем…' : 'Опубликовать отзыв'}</button></div>
+  </Modal>;
+};
+
+export const DealActionModal = ({ open, title, description, placeholder, confirmLabel, danger = false, onClose, onSubmit }: {
+  open: boolean; title: string; description: string; placeholder: string; confirmLabel: string; danger?: boolean; onClose: () => void; onSubmit: (note: string) => Promise<void>;
+}) => {
+  const [note, setNote] = useState(''); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    if (note.trim().length < (danger ? 10 : 3)) return setError(danger ? 'Опишите ситуацию минимум в 10 символах' : 'Уточните, что необходимо исправить');
+    setSaving(true); setError('');
+    try { await onSubmit(note.trim()); setNote(''); onClose(); }
+    catch (err) { setError(getApiErrorMessage(err, 'Не удалось обновить сделку')); }
+    finally { setSaving(false); }
+  };
+  return <Modal open={open} onClose={onClose} title={title} description={description}>
+    <label className="field"><span>Комментарий *</span><textarea rows={5} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder={placeholder}/></label>
+    {error && <p className="form-error">{error}</p>}
+    <div className="modal-actions"><button type="button" onClick={onClose} className="button-secondary">Отмена</button><button type="button" disabled={saving} onClick={submit} className={danger ? 'button-danger' : 'button-primary'}>{saving ? 'Сохраняем…' : confirmLabel}</button></div>
   </Modal>;
 };

@@ -24,7 +24,7 @@ export const ServiceDetails = () => {
         api.getSimilarServices(serviceId).then(setSimilar).catch(() => setSimilar([]));
         if (getToken()) {
           const [user, responses] = await Promise.all([api.getMe(), api.getSentResponses()]);
-          setCurrentUser(user); setActiveResponse(responses.find(item => item.service.id === serviceId && ['new', 'accepted'].includes(item.status)) || null);
+          setCurrentUser(user); setActiveResponse(responses.find(item => item.service.id === serviceId && ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'].includes(item.status)) || null);
         }
       } catch (err) { setError(getApiErrorMessage(err, 'Не удалось открыть объявление')); }
       finally { setLoading(false); }

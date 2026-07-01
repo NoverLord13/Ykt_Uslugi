@@ -17,15 +17,24 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 def _profile_response(user: User, db: Session, *, private: bool = False) -> UserProfileRead | CurrentUserProfileRead:
-    rating_avg, reviews_count = (
+    performer_avg, performer_count = (
         db.query(func.avg(Review.rating), func.count(Review.id))
-        .filter(Review.target_user_id == user.id)
+        .filter(Review.target_user_id == user.id, Review.review_type == "performer")
+        .one()
+    )
+    customer_avg, customer_count = (
+        db.query(func.avg(Review.rating), func.count(Review.id))
+        .filter(Review.target_user_id == user.id, Review.review_type == "customer")
         .one()
     )
     schema = CurrentUserProfileRead if private else UserProfileRead
     data = schema.model_validate(user)
-    data.rating_avg = float(rating_avg) if rating_avg is not None else None
-    data.reviews_count = reviews_count or 0
+    data.performer_rating_avg = float(performer_avg) if performer_avg is not None else None
+    data.performer_reviews_count = performer_count or 0
+    data.customer_rating_avg = float(customer_avg) if customer_avg is not None else None
+    data.customer_reviews_count = customer_count or 0
+    data.rating_avg = data.performer_rating_avg
+    data.reviews_count = data.performer_reviews_count + data.customer_reviews_count
     return data
 
 
@@ -132,10 +141,14 @@ def create_user_review(
         customer_id, performer_id = response.service.owner_id, response.respondent_id
     else:
         customer_id, performer_id = response.respondent_id, response.service.owner_id
-    if current_user.id != performer_id or target_user.id != customer_id:
+    if current_user.id == customer_id and target_user.id == performer_id:
+        review_type = "performer"
+    elif current_user.id == performer_id and target_user.id == customer_id:
+        review_type = "customer"
+    else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Отзыв может оставить только выбранный исполнитель после завершения сделки",
+            detail="Оценить друг друга могут только участники завершённой сделки",
         )
 
     existing = (
@@ -152,7 +165,8 @@ def create_user_review(
         service_id=response.service_id,
         response_id=response.id,
         rating=body.rating,
-        text=body.text,
+        review_type=review_type,
+        text=body.text.strip() if body.text else None,
     )
     db.add(review)
     try:
