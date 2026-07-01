@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Text, UniqueConstraint, func
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -18,6 +18,7 @@ class Review(Base):
         ForeignKey("service_responses.id", ondelete="SET NULL"), nullable=True, index=True
     )
     rating: Mapped[int] = mapped_column()
+    review_type: Mapped[str] = mapped_column(String(20), default="performer", index=True)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 

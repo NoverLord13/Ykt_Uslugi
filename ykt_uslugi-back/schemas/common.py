@@ -84,6 +84,7 @@ class ReviewRead(BaseModel):
     service_id: int | None = None
     response_id: int | None = None
     rating: int
+    review_type: str
     text: str | None = None
     created_at: datetime
 
@@ -101,6 +102,10 @@ class UserProfileRead(BaseModel):
     created_at: datetime
     rating_avg: float | None = None
     reviews_count: int = 0
+    performer_rating_avg: float | None = None
+    performer_reviews_count: int = 0
+    customer_rating_avg: float | None = None
+    customer_reviews_count: int = 0
 
 
 class CurrentUserProfileRead(UserProfileRead):
