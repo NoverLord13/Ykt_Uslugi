@@ -11,6 +11,7 @@ from models.user import User
 from schemas.common import ApiResponse, CurrentUserProfileRead, ReviewRead, ServiceRead, UserProfileRead
 from schemas.user import ReviewCreate, UserProfileUpdate
 from services.files import delete_upload, save_upload
+from services.reports import delete_target_reports
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -190,6 +191,7 @@ def delete_review(
     if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Опубликованный отзыв нельзя удалить — это сохраняет историю сделки")
 
+    delete_target_reports(db, "review", review.id)
     db.delete(review)
     db.commit()
     return ApiResponse(message="Отзыв удален")

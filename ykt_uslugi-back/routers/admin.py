@@ -8,6 +8,7 @@ from models.service import Category, Service, Subcategory
 from models.user import User
 from schemas.common import ApiResponse, CategoryRead, ReviewRead, ServiceRead, SubcategoryRead, UserRead
 from schemas.service import AdminServiceUpdate, AdminUserUpdate, CategoryCreate, CategoryUpdate, SubcategoryCreate, SubcategoryUpdate
+from services.reports import delete_target_reports
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -96,6 +97,7 @@ def admin_delete_service(
     if not service:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Услуга не найдена")
 
+    delete_target_reports(db, "service", service.id)
     db.delete(service)
     db.commit()
     return ApiResponse(message="Услуга удалена")
@@ -221,6 +223,7 @@ def admin_delete_review(review_id: int, _: User = Depends(require_admin), db: Se
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Отзыв не найден")
+    delete_target_reports(db, "review", review.id)
     db.delete(review)
     db.commit()
     return ApiResponse(message="Отзыв удален")

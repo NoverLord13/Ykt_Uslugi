@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from core.config import CORS_ORIGINS, UPLOAD_DIR
 from database import seed_categories
 from models import response, review, service, user
 from routers import admin, auth, categories, responses, services, users
+from services.maintenance import deal_maintenance_loop
 
 # Создание папки для загрузок
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
@@ -19,7 +21,13 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 async def lifespan(app: FastAPI):
     # Схема создаётся Alembic-миграциями до запуска приложения.
     seed_categories()
-    yield
+    maintenance_task = asyncio.create_task(deal_maintenance_loop())
+    try:
+        yield
+    finally:
+        maintenance_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await maintenance_task
 
 
 # Передаем lifespan в конструктор приложения

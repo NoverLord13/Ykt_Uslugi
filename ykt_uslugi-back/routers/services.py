@@ -12,6 +12,7 @@ from models.user import User
 from schemas.common import ApiResponse, ServiceRead
 from schemas.service import ServiceUpdate
 from services.files import delete_upload, save_uploads
+from services.reports import delete_target_reports
 
 router = APIRouter(prefix="/services", tags=["services"])
 MAX_SERVICE_IMAGES = 8
@@ -368,6 +369,7 @@ def delete_service(
     image_urls = {image.url for image in service.images}
     if service.image_url:
         image_urls.add(service.image_url)
+    delete_target_reports(db, "service", service.id)
     db.delete(service)
     db.commit()
     for url in image_urls:
