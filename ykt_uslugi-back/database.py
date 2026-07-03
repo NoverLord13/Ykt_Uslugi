@@ -1,7 +1,7 @@
 from collections.abc import Generator
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from core.config import DATABASE_URL
 
@@ -22,14 +22,17 @@ class Base(DeclarativeBase):
     pass
 
 
-def get_db() -> Generator:
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
-def seed_categories():
+def seed_categories() -> None:
     initial_categories = {
         "Ремонт": ["Сантехника", "Электрика", "Бытовая техника", "Отделка"],
         "Красота": ["Парикмахер", "Маникюр", "Макияж", "Массаж"],

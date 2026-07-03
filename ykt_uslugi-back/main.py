@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -12,14 +13,11 @@ from models import response, review, service, user
 from routers import admin, auth, categories, responses, services, users
 from services.maintenance import deal_maintenance_loop
 
-# Создание папки для загрузок
 Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
 
-# Контекстный менеджер, который срабатывает строго ОДИН раз при запуске сервера
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Схема создаётся Alembic-миграциями до запуска приложения.
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     seed_categories()
     maintenance_task = asyncio.create_task(deal_maintenance_loop())
     try:
@@ -30,7 +28,6 @@ async def lifespan(app: FastAPI):
             await maintenance_task
 
 
-# Передаем lifespan в конструктор приложения
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -51,5 +48,5 @@ app.include_router(admin.router)
 
 
 @app.get("/")
-def read_root():
+def read_root() -> dict[str, str]:
     return {"Hello": "World"}

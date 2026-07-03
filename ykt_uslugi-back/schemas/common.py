@@ -4,6 +4,8 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.domain_types import ListingType, PriceType, ServiceStatus, TokenType
+
 T = TypeVar("T")
 
 
@@ -41,7 +43,7 @@ class UserBrief(BaseModel):
 
 class TokenData(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: TokenType = "bearer"
     user: UserRead
 
 
@@ -121,12 +123,12 @@ class ServiceRead(BaseModel):
     title: str
     description: str
     price: Decimal | None
-    listing_type: str
+    listing_type: ListingType
     category: CategoryRead | None = None
     subcategory: SubcategoryRead | None = None
     location: str | None = None
-    price_type: str
-    status: str
+    price_type: PriceType
+    status: ServiceStatus
     contact_phone: str | None = None
     image_url: str | None
     is_active: bool

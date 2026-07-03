@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from core.domain_types import DealUpdateStatus
 from models.response import ServiceResponse
 
 AUTO_COMPLETE_HOURS = 72
@@ -19,6 +20,11 @@ class DealTransitionError(Exception):
 def utc_now_naive() -> datetime:
     """Return UTC in the representation currently used by the database schema."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def utc_from_storage(value: datetime) -> datetime:
+    """Interpret database datetimes consistently as UTC."""
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
 def auto_complete_overdue(db: Session) -> int:
@@ -45,7 +51,7 @@ def deal_roles(item: ServiceResponse) -> tuple[int, int]:
     return item.respondent_id, item.service.owner_id
 
 
-def apply_transition(db: Session, item: ServiceResponse, *, user_id: int, next_status: str, note: str | None) -> None:
+def apply_transition(db: Session, item: ServiceResponse, *, user_id: int, next_status: DealUpdateStatus, note: str | None) -> None:
     customer_id, performer_id = deal_roles(item)
     is_customer = user_id == customer_id
     is_performer = user_id == performer_id

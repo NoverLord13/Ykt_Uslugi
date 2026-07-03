@@ -65,6 +65,33 @@ class DealServiceTests(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_performer_can_submit_and_customer_can_complete_work(self) -> None:
+        response = self.add_response("accepted")
+
+        apply_transition(self.db, response, user_id=self.respondent.id, next_status="work_submitted", note="Ready")
+        self.assertEqual(response.status, "work_submitted")
+        self.assertIsNotNone(response.work_submitted_at)
+
+        apply_transition(self.db, response, user_id=self.owner.id, next_status="completed", note=None)
+        self.assertEqual(response.status, "completed")
+        self.assertIsNotNone(response.completed_at)
+
+    def test_final_status_cannot_be_changed(self) -> None:
+        response = self.add_response("completed")
+
+        with self.assertRaises(DealTransitionError) as context:
+            apply_transition(self.db, response, user_id=self.owner.id, next_status="cancelled", note=None)
+
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_dispute_requires_detailed_note(self) -> None:
+        response = self.add_response("accepted")
+
+        with self.assertRaises(DealTransitionError) as context:
+            apply_transition(self.db, response, user_id=self.owner.id, next_status="disputed", note="short")
+
+        self.assertEqual(context.exception.status_code, 400)
+
     def test_overdue_work_is_completed(self) -> None:
         response = self.add_response("work_submitted")
         response.work_submitted_at = utc_now_naive() - timedelta(hours=73)

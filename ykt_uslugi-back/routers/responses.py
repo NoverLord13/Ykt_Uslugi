@@ -1,4 +1,4 @@
-from datetime import timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -19,7 +19,7 @@ from schemas.response import (
     ResponseRead,
     ResponseUpdate,
 )
-from services.deals import ACTIVE_STATUSES, AUTO_COMPLETE_HOURS, DealTransitionError, apply_transition, deal_roles, utc_now_naive
+from services.deals import ACTIVE_STATUSES, AUTO_COMPLETE_HOURS, DealTransitionError, apply_transition, deal_roles, utc_from_storage, utc_now_naive
 
 router = APIRouter(tags=["responses"])
 
@@ -56,7 +56,7 @@ def _to_response_read(item: ServiceResponse, current_user: User, review_left: bo
     data.can_dispute = is_participant and item.status in {"accepted", "work_submitted", "revision_requested"}
     data.can_cancel = is_participant and item.status in {"new", "accepted"}
     if item.work_submitted_at:
-        submitted_utc = item.work_submitted_at.replace(tzinfo=timezone.utc)
+        submitted_utc = utc_from_storage(item.work_submitted_at)
         data.completion_deadline = submitted_utc + timedelta(hours=AUTO_COMPLETE_HOURS)
 
     data.review_left = review_left
