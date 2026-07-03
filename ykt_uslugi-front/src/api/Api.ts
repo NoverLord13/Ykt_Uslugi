@@ -256,11 +256,6 @@ export const api = {
     return unwrap(response);
   },
 
-  getSubcategories: async (categoryId: number): Promise<Subcategory[]> => {
-    const response = await axios.get<ApiResponse<Subcategory[]>>(`${API_URL}/categories/${categoryId}/subcategories`);
-    return unwrap(response);
-  },
-
   getMe: async (): Promise<UserProfile> => {
     const response = await axios.get<ApiResponse<UserProfile>>(`${API_URL}/users/me`, {
       headers: authHeaders(),
