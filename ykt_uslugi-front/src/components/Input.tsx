@@ -2,7 +2,6 @@ import React from 'react'
 
 type SizeType = "small" | "middle" | "large" | "description" | "title";
 type ColorType = "primary" | "secondary";
-//type InputType = "text" | "password";
 
 interface InputProps{
     size: SizeType;
