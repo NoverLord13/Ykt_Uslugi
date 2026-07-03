@@ -6,7 +6,7 @@ type ColorType = "primary" | "secondary";
 interface InputProps{
     size: SizeType;
     color: ColorType;
-    type: string;
+    type: React.HTMLInputTypeAttribute;
     placeholder?: string;
     value?: string;
     onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;

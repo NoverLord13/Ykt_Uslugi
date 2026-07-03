@@ -17,19 +17,24 @@ export const ServiceDetails = () => {
 
   useEffect(() => {
     if (!serviceId) { setError('Некорректный адрес объявления'); setLoading(false); return; }
+    let cancelled = false;
     const load = async () => {
       setLoading(true); setError('');
       try {
-        const data = await api.getAdBlockById(serviceId); setAd(data); setActiveImage(data.images[0]?.url || data.image_url || '');
-        api.getSimilarServices(serviceId).then(setSimilar).catch(() => setSimilar([]));
+        const data = await api.getAdBlockById(serviceId);
+        if (cancelled) return;
+        setAd(data); setActiveImage(data.images[0]?.url || data.image_url || '');
+        api.getSimilarServices(serviceId).then((items) => { if (!cancelled) setSimilar(items); }).catch(() => { if (!cancelled) setSimilar([]); });
         if (getToken()) {
           const [user, responses] = await Promise.all([api.getMe(), api.getSentResponses()]);
+          if (cancelled) return;
           setCurrentUser(user); setActiveResponse(responses.find(item => item.service.id === serviceId && ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'].includes(item.status)) || null);
         }
-      } catch (err) { setError(getApiErrorMessage(err, 'Не удалось открыть объявление')); }
-      finally { setLoading(false); }
+      } catch (err) { if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось открыть объявление')); }
+      finally { if (!cancelled) setLoading(false); }
     };
     void load();
+    return () => { cancelled = true; };
   }, [serviceId]);
 
   const respond = async () => {

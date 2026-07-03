@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     api,
@@ -24,6 +24,7 @@ export const Home = () => {
     const [ads, setAds] = useState<AdBlock[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [search, setSearch] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
     const [serviceMode, setServiceMode] = useState<ServiceMode>('all');
     const [categoryId, setCategoryId] = useState('');
     const [subcategoryId, setSubcategoryId] = useState('');
@@ -34,6 +35,7 @@ export const Home = () => {
     const [hasMore, setHasMore] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const latestRequest = useRef(0);
 
     const selectedCategory = categories.find((category) => String(category.id) === categoryId);
 
@@ -60,46 +62,51 @@ export const Home = () => {
         setSubcategoryId('');
     }, [categoryId]);
 
-    const buildFilters = (nextSkip: number): ServiceFilters => ({
+    const buildFilters = useCallback((nextSkip: number): ServiceFilters => ({
         skip: nextSkip,
         limit: LIMIT,
-        q: search.trim() || undefined,
+        q: appliedSearch || undefined,
         listing_type: serviceMode === 'all' ? undefined : serviceMode,
         category_id: categoryId ? Number(categoryId) : undefined,
         subcategory_id: subcategoryId ? Number(subcategoryId) : undefined,
         min_price: minPrice || undefined,
         max_price: maxPrice || undefined,
         sort,
-    });
+    }), [appliedSearch, categoryId, maxPrice, minPrice, serviceMode, sort, subcategoryId]);
 
-    const loadAds = async (nextSkip = 0, append = false) => {
+    const loadAds = useCallback(async (nextSkip = 0, append = false) => {
+        const requestId = ++latestRequest.current;
         setIsLoading(true);
         setError('');
         try {
             const data = await api.getAdBlock(buildFilters(nextSkip));
+            if (requestId !== latestRequest.current) return;
             setAds((prev) => append ? [...prev, ...data.filter((item) => !prev.some((old) => old.id === item.id))] : data);
             setSkip(nextSkip + data.length);
             setHasMore(data.length === LIMIT);
         } catch (err) {
+            if (requestId !== latestRequest.current) return;
             console.error(err);
             setError(getApiErrorMessage(err, 'Не удалось загрузить объявления'));
         } finally {
-            setIsLoading(false);
+            if (requestId === latestRequest.current) setIsLoading(false);
         }
-    };
+    }, [buildFilters]);
 
     useEffect(() => {
-        loadAds(0, false);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [serviceMode, categoryId, subcategoryId, minPrice, maxPrice, sort]);
+        void loadAds(0, false);
+    }, [loadAds]);
 
     const handleSearchSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        loadAds(0, false);
+        const nextSearch = search.trim();
+        if (nextSearch === appliedSearch) void loadAds(0, false);
+        else setAppliedSearch(nextSearch);
     };
 
     const clearFilters = () => {
         setSearch('');
+        setAppliedSearch('');
         setServiceMode('all');
         setCategoryId('');
         setSubcategoryId('');

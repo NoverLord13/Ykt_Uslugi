@@ -11,10 +11,31 @@ export const Profile = () => {
   const [editing, setEditing] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
   const [report, setReport] = useState<{ type: 'user' | 'review'; id: number } | null>(null);
 
-  const load = async () => { if (!isOwn && (!targetId || Number.isNaN(targetId))) { setError('Некорректный профиль'); setLoading(false); return; } setLoading(true); setError(''); try { const data = isOwn ? await api.getMe() : await api.getUserProfile(targetId!); setProfile(data); setDisplayName(data.display_name || ''); setBio(data.bio || ''); setLocation(data.location || ''); setTelegram(data.telegram_username || ''); const [userAds, userReviews] = await Promise.all([api.getUserServices(data.id), api.getUserReviews(data.id)]); setAds(userAds); setReviews(userReviews); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось загрузить профиль')); } finally { setLoading(false); } };
-  // Reload when navigating between public profiles; form state is populated by load.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!isOwn && (!targetId || Number.isNaN(targetId))) {
+      setError('Некорректный профиль');
+      setLoading(false);
+      return;
+    }
+    const load = async () => {
+      setLoading(true); setError('');
+      try {
+        const data = isOwn ? await api.getMe() : await api.getUserProfile(targetId!);
+        const [userAds, userReviews] = await Promise.all([api.getUserServices(data.id), api.getUserReviews(data.id)]);
+        if (cancelled) return;
+        setProfile(data); setDisplayName(data.display_name || ''); setBio(data.bio || '');
+        setLocation(data.location || ''); setTelegram(data.telegram_username || '');
+        setAds(userAds); setReviews(userReviews);
+      } catch (err) {
+        if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось загрузить профиль'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [isOwn, targetId]);
   const save = async () => { setSaving(true); setError(''); try { let updated = await api.updateMe({ display_name: displayName.trim(), bio: bio.trim(), location: location.trim(), telegram_username: telegram.replace(/^@/, '') }); if (avatar) updated = await api.uploadAvatar(avatar); setProfile(updated); setEditing(false); setAvatar(null); setNotice('Профиль обновлён'); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось сохранить профиль')); } finally { setSaving(false); } };
 
   if (loading) return <div className="page-shell"><div className="empty-state">Собираем профиль…</div></div>;

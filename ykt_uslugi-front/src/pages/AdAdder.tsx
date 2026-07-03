@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getApiErrorMessage, type Category } from '../api/Api';
+import { buildServiceFormData, validateServiceForm } from '../components/serviceForm';
 
 export const AdAdder = () => {
   const navigate = useNavigate(); const [categories, setCategories] = useState<Category[]>([]);
@@ -18,11 +19,10 @@ export const AdAdder = () => {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => { const picked = Array.from(event.target.files || []); if (picked.length > 8) setError('Можно добавить не больше 8 фотографий'); setFiles(picked.slice(0, 8)); };
   const submit = async () => {
     setError('');
-    if (title.trim().length < 3) return setError('Название должно содержать минимум 3 символа');
-    if (description.trim().length < 20) return setError('Добавьте немного деталей — минимум 20 символов');
-    if (priceType !== 'negotiable' && (!price || Number(price) <= 0)) return setError('Укажите стоимость больше нуля или выберите договорную цену');
-    const data = new FormData(); data.append('title', title.trim()); data.append('description', description.trim()); data.append('listing_type', listingType); data.append('price_type', priceType);
-    if (priceType !== 'negotiable') data.append('price', price); if (categoryId) data.append('category_id', categoryId); if (subcategoryId) data.append('subcategory_id', subcategoryId); if (location.trim()) data.append('location', location.trim()); if (contactPhone) data.append('contact_phone', contactPhone); files.forEach(file => data.append('images', file));
+    const value = { title, description, price, listingType, priceType, categoryId, subcategoryId, location, contactPhone, files };
+    const validationError = validateServiceForm(value, 20, 3);
+    if (validationError) return setError(validationError);
+    const data = buildServiceFormData(value);
     setIsSaving(true); try { const created = await api.addAdBlock(data); navigate(`/services/${created.id}`); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать объявление')); } finally { setIsSaving(false); }
   };
 

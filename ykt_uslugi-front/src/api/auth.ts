@@ -22,14 +22,14 @@ export interface VerificationTokenData {
 export function sendRegisterCode(phone: string) {
   return apiRequest<null>("/auth/register/send-code", {
     method: "POST",
-    body: JSON.stringify({ phone }),
+    data: { phone },
   });
 }
 
 export function verifyRegisterCode(phone: string, code: string) {
   return apiRequest<VerificationTokenData>("/auth/register/verify-code", {
     method: "POST",
-    body: JSON.stringify({ phone, code }),
+    data: { phone, code },
   });
 }
 
@@ -41,33 +41,33 @@ export function completeRegistration(
 ) {
   return apiRequest<TokenData>("/auth/register/complete", {
     method: "POST",
-    body: JSON.stringify({
+    data: {
       verification_token: verificationToken,
       username,
       password,
       accept_terms: acceptTerms,
-    }),
+    },
   });
 }
 
 export function login(login: string, password: string) {
   return apiRequest<TokenData>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ login, password }),
+    data: { login, password },
   });
 }
 
 export function sendLoginCode(phone: string) {
   return apiRequest<null>("/auth/login/phone/send-code", {
     method: "POST",
-    body: JSON.stringify({ phone }),
+    data: { phone },
   });
 }
 
 export function verifyLoginCode(phone: string, code: string) {
   return apiRequest<TokenData>("/auth/login/phone/verify-code", {
     method: "POST",
-    body: JSON.stringify({ phone, code }),
+    data: { phone, code },
   });
 }
 

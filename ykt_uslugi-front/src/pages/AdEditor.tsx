@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, fileUrl, getApiErrorMessage, type Category } from '../api/Api';
+import { buildServiceFormData, validateServiceForm } from '../components/serviceForm';
 
 export const AdEditor = () => {
   const { id } = useParams();
@@ -75,25 +76,14 @@ export const AdEditor = () => {
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !description.trim() || (priceType !== 'negotiable' && (!price.trim() || Number(price) <= 0))) {
-      setError('Заполните название, описание и корректную цену или выберите договорную');
-      return;
-    }
+    const value = { title, description, price, listingType, priceType, categoryId, subcategoryId, location, contactPhone, files };
+    const validationError = validateServiceForm(value);
+    if (validationError) { setError(validationError); return; }
 
-    const formData = new FormData();
-    formData.append('title', title.trim());
-    formData.append('description', description.trim());
-    if (priceType !== 'negotiable') formData.append('price', price);
-    formData.append('listing_type', listingType);
-    formData.append('price_type', priceType);
+    const formData = buildServiceFormData(value);
     formData.append('status', statusValue);
-    if (categoryId) formData.append('category_id', categoryId);
-    else formData.append('clear_category', 'true');
-    if (subcategoryId) formData.append('subcategory_id', subcategoryId);
-    else formData.append('clear_subcategory', 'true');
-    formData.append('location', location.trim());
-    formData.append('contact_phone', contactPhone.trim());
-    files.forEach((file) => formData.append('images', file));
+    if (!categoryId) formData.append('clear_category', 'true');
+    if (!subcategoryId) formData.append('clear_subcategory', 'true');
     if (existingImages.length === 0 && files.length === 0) formData.append('clear_images', 'true');
 
     setIsSaving(true);
