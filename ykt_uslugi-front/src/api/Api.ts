@@ -58,7 +58,7 @@ export interface Review {
   created_at: string;
 }
 
-export interface AdBlock {
+export interface ServiceListing {
   id: number;
   title: string;
   description: string;
@@ -103,12 +103,15 @@ export interface ReviewCreate {
   text?: string;
 }
 
+export type DealStatus = 'new' | 'accepted' | 'work_submitted' | 'revision_requested' | 'disputed' | 'completed' | 'cancelled' | 'declined';
+export const ACTIVE_DEAL_STATUSES: DealStatus[] = ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'];
+
 export interface ServiceResponse {
   id: number;
   service: { id: number; title: string; listing_type: 'offer' | 'request'; owner: UserBrief };
   respondent: UserBrief;
   message: string | null;
-  status: 'new' | 'accepted' | 'work_submitted' | 'revision_requested' | 'disputed' | 'completed' | 'cancelled' | 'declined';
+  status: DealStatus;
   status_note: string | null;
   work_submitted_at: string | null;
   completion_deadline: string | null;
@@ -152,7 +155,7 @@ const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
 };
 
 export const getApiErrorMessage = (error: unknown, fallback = 'Ошибка запроса') => {
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message && error.message !== 'Ошибка запроса') return error.message;
   return fallback;
 };
 
@@ -162,63 +165,63 @@ export const fileUrl = (path?: string | null) => {
   return `${API_BASE}${path}`;
 };
 
-export const formatPrice = (ad: Pick<AdBlock, 'price' | 'price_type'>) => {
+export const formatPrice = (ad: Pick<ServiceListing, 'price' | 'price_type'>) => {
   if (ad.price_type === 'negotiable') return 'Цена договорная';
   const value = new Intl.NumberFormat('ru-RU').format(ad.price ?? 0);
   if (ad.price_type === 'from') return `от ${value} ₽`;
   return `${value} ₽`;
 };
 
-export const listingTypeLabel = (type: AdBlock['listing_type']) =>
+export const listingTypeLabel = (type: ServiceListing['listing_type']) =>
   type === 'offer' ? 'Оказываю услугу' : 'Ищу услугу';
 
 export const api = {
-  getAdBlock: async (filters: ServiceFilters = {}): Promise<AdBlock[]> => {
-    const response = await http.get<ApiResponse<AdBlock[]>>(`/services`, {
+  getServiceListing: async (filters: ServiceFilters = {}): Promise<ServiceListing[]> => {
+    const response = await http.get<ApiResponse<ServiceListing[]>>(`/services`, {
       params: filters,
     });
     return unwrap(response);
   },
 
-  getAdBlockById: async (id: number): Promise<AdBlock> => {
-    const response = await http.get<ApiResponse<AdBlock>>(`/services/${id}`, { headers: authHeaders() });
+  getServiceListingById: async (id: number): Promise<ServiceListing> => {
+    const response = await http.get<ApiResponse<ServiceListing>>(`/services/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  getSimilarServices: async (id: number, limit = 8): Promise<AdBlock[]> => {
-    const response = await http.get<ApiResponse<AdBlock[]>>(`/services/${id}/similar`, {
+  getSimilarServices: async (id: number, limit = 8): Promise<ServiceListing[]> => {
+    const response = await http.get<ApiResponse<ServiceListing[]>>(`/services/${id}/similar`, {
       params: { limit },
     });
     return unwrap(response);
   },
 
-  getMyAdBlocks: async (): Promise<AdBlock[]> => {
-    const response = await http.get<ApiResponse<AdBlock[]>>(`/services/mine`, {
+  getMyServiceListings: async (): Promise<ServiceListing[]> => {
+    const response = await http.get<ApiResponse<ServiceListing[]>>(`/services/mine`, {
       headers: authHeaders(),
     });
     return unwrap(response);
   },
 
-  getMyAdBlockById: async (id: number): Promise<AdBlock> => {
-    const response = await http.get<ApiResponse<AdBlock>>(`/services/manage/${id}`, { headers: authHeaders() });
+  getMyServiceListingById: async (id: number): Promise<ServiceListing> => {
+    const response = await http.get<ApiResponse<ServiceListing>>(`/services/manage/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  addAdBlock: async (formData: FormData) => {
-    const response = await http.post<ApiResponse<AdBlock>>(`/services`, formData, {
+  addServiceListing: async (formData: FormData) => {
+    const response = await http.post<ApiResponse<ServiceListing>>(`/services`, formData, {
       headers: authHeaders(),
     });
     return unwrap(response);
   },
 
-  updateAdBlock: async (id: number, formData: FormData) => {
-    const response = await http.put<ApiResponse<AdBlock>>(`/services/${id}`, formData, {
+  updateServiceListing: async (id: number, formData: FormData) => {
+    const response = await http.put<ApiResponse<ServiceListing>>(`/services/${id}`, formData, {
       headers: authHeaders(),
     });
     return unwrap(response);
   },
 
-  deleteAdBlock: async (id: number) => {
+  deleteServiceListing: async (id: number) => {
     const response = await http.delete<ApiResponse<null>>(`/services/${id}`, {
       headers: authHeaders(),
     });
@@ -258,8 +261,8 @@ export const api = {
     return unwrap(response);
   },
 
-  getUserServices: async (id: number): Promise<AdBlock[]> => {
-    const response = await http.get<ApiResponse<AdBlock[]>>(`/users/${id}/services`);
+  getUserServices: async (id: number): Promise<ServiceListing[]> => {
+    const response = await http.get<ApiResponse<ServiceListing[]>>(`/users/${id}/services`);
     return unwrap(response);
   },
 
@@ -320,13 +323,13 @@ export const api = {
     return unwrap(response);
   },
 
-  adminGetServices: async (): Promise<AdBlock[]> => {
-    const response = await http.get<ApiResponse<AdBlock[]>>(`/admin/services`, { headers: authHeaders() });
+  adminGetServices: async (): Promise<ServiceListing[]> => {
+    const response = await http.get<ApiResponse<ServiceListing[]>>(`/admin/services`, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  adminUpdateService: async (id: number, status: AdBlock['status']): Promise<AdBlock> => {
-    const response = await http.patch<ApiResponse<AdBlock>>(`/admin/services/${id}`, { status }, { headers: authHeaders() });
+  adminUpdateService: async (id: number, status: ServiceListing['status']): Promise<ServiceListing> => {
+    const response = await http.patch<ApiResponse<ServiceListing>>(`/admin/services/${id}`, { status }, { headers: authHeaders() });
     return unwrap(response);
   },
 

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, fileUrl, formatPrice, getApiErrorMessage, type AdBlock, type Review, type UserProfile } from '../api/Api';
+import { api, fileUrl, formatPrice, getApiErrorMessage, type ServiceListing, type Review, type UserProfile } from '../api/Api';
 import { getToken } from '../api/auth';
 import { ReportModal } from '../components/FeedbackModals';
 
 export const Profile = () => {
   const { id } = useParams(); const isOwn = !id; const targetId = id ? Number(id) : null;
-  const [profile, setProfile] = useState<UserProfile | null>(null); const [ads, setAds] = useState<AdBlock[]>([]); const [reviews, setReviews] = useState<Review[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null); const [ads, setAds] = useState<ServiceListing[]>([]); const [reviews, setReviews] = useState<Review[]>([]);
   const [displayName, setDisplayName] = useState(''); const [bio, setBio] = useState(''); const [location, setLocation] = useState(''); const [telegram, setTelegram] = useState(''); const [avatar, setAvatar] = useState<File | null>(null);
   const [editing, setEditing] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
   const [report, setReport] = useState<{ type: 'user' | 'review'; id: number } | null>(null);

@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock } from '../api/Api';
+import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type ServiceListing } from '../api/Api';
 import { Modal } from '../components/Modal';
 
-const statusMeta: Record<AdBlock['status'], { label: string; className: string }> = {
+const statusMeta: Record<ServiceListing['status'], { label: string; className: string }> = {
   active: { label: 'Опубликовано', className: 'bg-[#dff8ee] text-[#157354]' }, hidden: { label: 'Скрыто', className: 'bg-[#f1eef3] text-[#746d80]' },
   moderation: { label: 'На проверке', className: 'bg-[#fff3dc] text-[#9a5b00]' }, closed: { label: 'Закрыто', className: 'bg-[#e7f0ff] text-[#245ca8]' },
 };
-type Filter = 'all' | AdBlock['status'];
+type Filter = 'all' | ServiceListing['status'];
 
 export const MyAds = () => {
-  const navigate = useNavigate(); const [ads, setAds] = useState<AdBlock[]>([]); const [filter, setFilter] = useState<Filter>('all'); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [deleting, setDeleting] = useState<AdBlock | null>(null); const [busy, setBusy] = useState(false);
-  useEffect(() => { api.getMyAdBlocks().then(setAds).catch(err => setError(getApiErrorMessage(err, 'Не удалось загрузить объявления'))).finally(() => setLoading(false)); }, []);
+  const navigate = useNavigate(); const [ads, setAds] = useState<ServiceListing[]>([]); const [filter, setFilter] = useState<Filter>('all'); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [deleting, setDeleting] = useState<ServiceListing | null>(null); const [busy, setBusy] = useState(false);
+  useEffect(() => { api.getMyServiceListings().then(setAds).catch(err => setError(getApiErrorMessage(err, 'Не удалось загрузить объявления'))).finally(() => setLoading(false)); }, []);
   const visible = useMemo(() => filter === 'all' ? ads : ads.filter(item => item.status === filter), [ads, filter]);
-  const remove = async () => { if (!deleting) return; setBusy(true); setError(''); try { await api.deleteAdBlock(deleting.id); setAds(items => items.filter(item => item.id !== deleting.id)); setDeleting(null); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось удалить объявление')); setDeleting(null); } finally { setBusy(false); } };
+  const remove = async () => { if (!deleting) return; setBusy(true); setError(''); try { await api.deleteServiceListing(deleting.id); setAds(items => items.filter(item => item.id !== deleting.id)); setDeleting(null); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось удалить объявление')); setDeleting(null); } finally { setBusy(false); } };
   const filters: { value: Filter; label: string }[] = [{ value: 'all', label: 'Все' }, { value: 'active', label: 'Опубликованы' }, { value: 'hidden', label: 'Скрыты' }, { value: 'closed', label: 'Закрыты' }, { value: 'moderation', label: 'На проверке' }];
 
   return <div className="page-shell"><header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow">Ваши публикации</p><h1 className="page-title mt-2">Мои объявления</h1><p className="page-subtitle mt-3">Управляйте видимостью, обновляйте детали и следите за актуальностью предложений.</p></div><Link to="/adadder" className="button-primary">＋ Новое объявление</Link></header>

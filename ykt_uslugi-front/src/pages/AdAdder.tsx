@@ -12,7 +12,17 @@ export const AdAdder = () => {
   const selectedCategory = categories.find(category => String(category.id) === categoryId);
   const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files]);
   useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews]);
-  useEffect(() => { api.getCategories().then(setCategories).catch(err => setError(getApiErrorMessage(err, 'Не удалось загрузить категории'))); api.getMe().then(user => setContactPhone(user.phone_number || '')).catch(() => undefined); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.getCategories(), api.getMe()])
+      .then(([categoryItems, user]) => {
+        if (cancelled) return;
+        setCategories(categoryItems);
+        setContactPhone(user.phone_number || '');
+      })
+      .catch((err) => { if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось подготовить форму')); });
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { setSubcategoryId(''); }, [categoryId]);
   useEffect(() => { if (priceType === 'negotiable') setPrice(''); }, [priceType]);
 
@@ -23,7 +33,7 @@ export const AdAdder = () => {
     const validationError = validateServiceForm(value, 20, 3);
     if (validationError) return setError(validationError);
     const data = buildServiceFormData(value);
-    setIsSaving(true); try { const created = await api.addAdBlock(data); navigate(`/services/${created.id}`); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать объявление')); } finally { setIsSaving(false); }
+    setIsSaving(true); try { const created = await api.addServiceListing(data); navigate(`/services/${created.id}`); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать объявление')); } finally { setIsSaving(false); }
   };
 
   return <div className="page-shell max-w-[980px]">

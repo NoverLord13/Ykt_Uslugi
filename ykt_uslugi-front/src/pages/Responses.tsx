@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, getApiErrorMessage, type ServiceResponse } from '../api/Api';
+import { ACTIVE_DEAL_STATUSES, api, getApiErrorMessage, type ServiceResponse } from '../api/Api';
 import { DealActionModal, ReviewModal } from '../components/FeedbackModals';
 
 const statusMeta: Record<ServiceResponse['status'], { label: string; className: string; hint: string }> = {
@@ -16,7 +16,6 @@ const statusMeta: Record<ServiceResponse['status'], { label: string; className: 
 
 type View = 'active' | 'history';
 type NoteAction = { item: ServiceResponse; type: 'revision_requested' | 'disputed' };
-const activeStatuses: ServiceResponse['status'][] = ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'];
 
 export const Responses = () => {
   const [sent, setSent] = useState<ServiceResponse[]>([]); const [received, setReceived] = useState<ServiceResponse[]>([]);
@@ -26,8 +25,8 @@ export const Responses = () => {
   const load = async () => { setLoading(true); setError(''); try { const [sentData, receivedData] = await Promise.all([api.getSentResponses(), api.getReceivedResponses()]); setSent(sentData); setReceived(receivedData); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось загрузить сделки')); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, []);
   const all = useMemo(() => [...received.map(item => ({ item, incoming: true })), ...sent.map(item => ({ item, incoming: false }))], [received, sent]);
-  const visible = all.filter(({ item }) => view === 'active' ? activeStatuses.includes(item.status) : !activeStatuses.includes(item.status));
-  const activeCount = all.filter(({ item }) => activeStatuses.includes(item.status)).length;
+  const visible = all.filter(({ item }) => view === 'active' ? ACTIVE_DEAL_STATUSES.includes(item.status) : !ACTIVE_DEAL_STATUSES.includes(item.status));
+  const activeCount = all.filter(({ item }) => ACTIVE_DEAL_STATUSES.includes(item.status)).length;
 
   const changeStatus = async (id: number, status: ServiceResponse['status'], note?: string) => { setBusyId(id); setError(''); try { await api.updateResponse(id, status, note); await load(); } catch (err) { const message = getApiErrorMessage(err, 'Не удалось изменить статус'); setError(message); throw err; } finally { setBusyId(null); } };
 

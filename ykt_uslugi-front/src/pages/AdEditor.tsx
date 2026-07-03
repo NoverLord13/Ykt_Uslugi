@@ -40,7 +40,7 @@ export const AdEditor = () => {
       try {
         const [categoriesData, ad] = await Promise.all([
           api.getCategories(),
-          api.getMyAdBlockById(serviceId),
+          api.getMyServiceListingById(serviceId),
         ]);
         setCategories(categoriesData);
         setTitle(ad.title);
@@ -89,7 +89,7 @@ export const AdEditor = () => {
     setIsSaving(true);
     setError('');
     try {
-      const updated = await api.updateAdBlock(serviceId, formData);
+      const updated = await api.updateServiceListing(serviceId, formData);
       navigate(`/services/${updated.id}`);
     } catch (err) {
       console.error(err);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock, type ServiceResponse, type UserProfile } from '../api/Api';
+import { ACTIVE_DEAL_STATUSES, api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type ServiceListing, type ServiceResponse, type UserProfile } from '../api/Api';
 import { getToken } from '../api/auth';
 import { ReportModal } from '../components/FeedbackModals';
 
@@ -10,7 +10,7 @@ const PhoneIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true" className="h
 
 export const ServiceDetails = () => {
   const { id } = useParams(); const navigate = useNavigate(); const serviceId = Number(id);
-  const [ad, setAd] = useState<AdBlock | null>(null); const [similar, setSimilar] = useState<AdBlock[]>([]); const [activeImage, setActiveImage] = useState('');
+  const [ad, setAd] = useState<ServiceListing | null>(null); const [similar, setSimilar] = useState<ServiceListing[]>([]); const [activeImage, setActiveImage] = useState('');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null); const [activeResponse, setActiveResponse] = useState<ServiceResponse | null>(null);
   const [responseMessage, setResponseMessage] = useState(''); const [showPhone, setShowPhone] = useState(false); const [reportOpen, setReportOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState(''); const [actionError, setActionError] = useState(false); const [loading, setLoading] = useState(true); const [responding, setResponding] = useState(false); const [error, setError] = useState('');
@@ -21,14 +21,14 @@ export const ServiceDetails = () => {
     const load = async () => {
       setLoading(true); setError('');
       try {
-        const data = await api.getAdBlockById(serviceId);
+        const data = await api.getServiceListingById(serviceId);
         if (cancelled) return;
         setAd(data); setActiveImage(data.images[0]?.url || data.image_url || '');
         api.getSimilarServices(serviceId).then((items) => { if (!cancelled) setSimilar(items); }).catch(() => { if (!cancelled) setSimilar([]); });
         if (getToken()) {
           const [user, responses] = await Promise.all([api.getMe(), api.getSentResponses()]);
           if (cancelled) return;
-          setCurrentUser(user); setActiveResponse(responses.find(item => item.service.id === serviceId && ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'].includes(item.status)) || null);
+          setCurrentUser(user); setActiveResponse(responses.find(item => item.service.id === serviceId && ACTIVE_DEAL_STATUSES.includes(item.status)) || null);
         }
       } catch (err) { if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось открыть объявление')); }
       finally { if (!cancelled) setLoading(false); }
