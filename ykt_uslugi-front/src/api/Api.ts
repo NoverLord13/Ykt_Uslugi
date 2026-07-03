@@ -1,5 +1,6 @@
 import { getToken } from './auth';
 import { API_BASE, http, type ApiResponse } from './client';
+import { getCachedCategories, getCachedUser, setCachedUser } from './cache';
 
 
 export interface Subcategory {
@@ -16,9 +17,12 @@ export interface Category {
   subcategories: Subcategory[];
 }
 
+export type CategoryBrief = Omit<Category, 'subcategories'>;
+
 export interface ServiceImage {
   id: number;
   url: string;
+  thumbnail_url: string | null;
   position: number;
 }
 
@@ -27,6 +31,7 @@ export interface UserBrief {
   username: string;
   display_name?: string | null;
   avatar_url?: string | null;
+  avatar_thumbnail_url?: string | null;
   telegram_username?: string | null;
 }
 
@@ -71,12 +76,17 @@ export interface ServiceListing {
   status: 'active' | 'hidden' | 'moderation' | 'closed';
   contact_phone: string | null;
   image_url: string | null;
+  image_thumbnail_url: string | null;
   images: ServiceImage[];
   is_active: boolean;
   owner: UserBrief;
   created_at: string;
   updated_at: string;
 }
+
+export type ServiceSummary = Omit<ServiceListing, 'description' | 'contact_phone' | 'category'> & {
+  category: CategoryBrief | null;
+};
 
 export interface ServiceFilters {
   q?: string;
@@ -176,8 +186,8 @@ export const listingTypeLabel = (type: ServiceListing['listing_type']) =>
   type === 'offer' ? 'Оказываю услугу' : 'Ищу услугу';
 
 export const api = {
-  getServiceListing: async (filters: ServiceFilters = {}): Promise<ServiceListing[]> => {
-    const response = await http.get<ApiResponse<ServiceListing[]>>(`/services`, {
+  getServiceListing: async (filters: ServiceFilters = {}): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/services`, {
       params: filters,
     });
     return unwrap(response);
@@ -188,16 +198,17 @@ export const api = {
     return unwrap(response);
   },
 
-  getSimilarServices: async (id: number, limit = 8): Promise<ServiceListing[]> => {
-    const response = await http.get<ApiResponse<ServiceListing[]>>(`/services/${id}/similar`, {
+  getSimilarServices: async (id: number, limit = 8): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/services/${id}/similar`, {
       params: { limit },
     });
     return unwrap(response);
   },
 
-  getMyServiceListings: async (): Promise<ServiceListing[]> => {
+  getMyServiceListings: async (skip = 0, limit = 50): Promise<ServiceListing[]> => {
     const response = await http.get<ApiResponse<ServiceListing[]>>(`/services/mine`, {
       headers: authHeaders(),
+      params: { skip, limit },
     });
     return unwrap(response);
   },
@@ -228,23 +239,25 @@ export const api = {
     return response.data;
   },
 
-  getCategories: async (): Promise<Category[]> => {
+  getCategories: (): Promise<Category[]> => getCachedCategories(async () => {
     const response = await http.get<ApiResponse<Category[]>>(`/categories`);
     return unwrap(response);
-  },
+  }),
 
-  getMe: async (): Promise<UserProfile> => {
+  getMe: (): Promise<UserProfile> => getCachedUser(async () => {
     const response = await http.get<ApiResponse<UserProfile>>(`/users/me`, {
       headers: authHeaders(),
     });
     return unwrap(response);
-  },
+  }),
 
   updateMe: async (body: UserProfileUpdate): Promise<UserProfile> => {
     const response = await http.patch<ApiResponse<UserProfile>>(`/users/me`, body, {
       headers: authHeaders(),
     });
-    return unwrap(response);
+    const user = unwrap(response);
+    setCachedUser(user);
+    return user;
   },
 
   uploadAvatar: async (avatar: File): Promise<UserProfile> => {
@@ -253,7 +266,9 @@ export const api = {
     const response = await http.post<ApiResponse<UserProfile>>(`/users/me/avatar`, formData, {
       headers: authHeaders(),
     });
-    return unwrap(response);
+    const user = unwrap(response);
+    setCachedUser(user);
+    return user;
   },
 
   getUserProfile: async (id: number): Promise<UserProfile> => {
@@ -261,13 +276,13 @@ export const api = {
     return unwrap(response);
   },
 
-  getUserServices: async (id: number): Promise<ServiceListing[]> => {
-    const response = await http.get<ApiResponse<ServiceListing[]>>(`/users/${id}/services`);
+  getUserServices: async (id: number, skip = 0, limit = 50): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/users/${id}/services`, { params: { skip, limit } });
     return unwrap(response);
   },
 
-  getUserReviews: async (id: number): Promise<Review[]> => {
-    const response = await http.get<ApiResponse<Review[]>>(`/users/${id}/reviews`);
+  getUserReviews: async (id: number, skip = 0, limit = 50): Promise<Review[]> => {
+    const response = await http.get<ApiResponse<Review[]>>(`/users/${id}/reviews`, { params: { skip, limit } });
     return unwrap(response);
   },
 
@@ -283,13 +298,18 @@ export const api = {
     return unwrap(response);
   },
 
-  getSentResponses: async (): Promise<ServiceResponse[]> => {
-    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/responses/sent`, { headers: authHeaders() });
+  getMyActiveResponse: async (serviceId: number): Promise<ServiceResponse | null> => {
+    const response = await http.get<ApiResponse<ServiceResponse | null>>(`/services/${serviceId}/my-response`, { headers: authHeaders() });
+    return response.data.data;
+  },
+
+  getSentResponses: async (skip = 0, limit = 50): Promise<ServiceResponse[]> => {
+    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/responses/sent`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
-  getReceivedResponses: async (): Promise<ServiceResponse[]> => {
-    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/responses/received`, { headers: authHeaders() });
+  getReceivedResponses: async (skip = 0, limit = 50): Promise<ServiceResponse[]> => {
+    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/responses/received`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
@@ -298,8 +318,8 @@ export const api = {
     return unwrap(response);
   },
 
-  adminGetDisputedResponses: async (): Promise<ServiceResponse[]> => {
-    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/admin/responses/disputed`, { headers: authHeaders() });
+  adminGetDisputedResponses: async (skip = 0, limit = 50): Promise<ServiceResponse[]> => {
+    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/admin/responses/disputed`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
@@ -313,8 +333,8 @@ export const api = {
     return unwrap(response);
   },
 
-  adminGetUsers: async (): Promise<UserProfile[]> => {
-    const response = await http.get<ApiResponse<UserProfile[]>>(`/admin/users`, { headers: authHeaders() });
+  adminGetUsers: async (skip = 0, limit = 50): Promise<UserProfile[]> => {
+    const response = await http.get<ApiResponse<UserProfile[]>>(`/admin/users`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
@@ -323,8 +343,8 @@ export const api = {
     return unwrap(response);
   },
 
-  adminGetServices: async (): Promise<ServiceListing[]> => {
-    const response = await http.get<ApiResponse<ServiceListing[]>>(`/admin/services`, { headers: authHeaders() });
+  adminGetServices: async (skip = 0, limit = 50): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/admin/services`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
@@ -333,13 +353,13 @@ export const api = {
     return unwrap(response);
   },
 
-  adminGetReports: async (): Promise<Report[]> => {
-    const response = await http.get<ApiResponse<Report[]>>(`/admin/reports`, { headers: authHeaders() });
+  adminGetReports: async (skip = 0, limit = 50): Promise<Report[]> => {
+    const response = await http.get<ApiResponse<Report[]>>(`/admin/reports`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
-  adminGetReviews: async (): Promise<Review[]> => {
-    const response = await http.get<ApiResponse<Review[]>>(`/admin/reviews`, { headers: authHeaders() });
+  adminGetReviews: async (skip = 0, limit = 50): Promise<Review[]> => {
+    const response = await http.get<ApiResponse<Review[]>>(`/admin/reviews`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 

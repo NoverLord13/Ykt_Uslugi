@@ -185,7 +185,7 @@ export const AdEditor = () => {
             <div>
               <p className="mb-2 text-sm font-semibold text-[#1A1A1A]">Текущие фото</p>
               <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
-                {existingImages.map((image) => <img key={image} src={fileUrl(image)} alt="Фото" className="aspect-square rounded-xl object-cover" />)}
+                {existingImages.map((image) => <img loading="lazy" decoding="async" key={image} src={fileUrl(image)} alt="Фото" className="aspect-square rounded-xl object-cover" />)}
               </div>
             </div>
           )}

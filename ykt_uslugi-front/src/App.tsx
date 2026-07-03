@@ -1,19 +1,22 @@
 import "./App.css";
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Home } from "./pages/Home";
-import { Register } from "./pages/Register";
-import { Login } from "./pages/Login";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
-import { AdAdder } from "./pages/AdAdder";
-import { MyAds } from "./pages/MyAds";
-import {Profile} from "./pages/Profile"
-import { ServiceDetails } from "./pages/ServiceDetails";
-import { AdEditor } from "./pages/AdEditor";
-import { Responses } from "./pages/Responses";
-import { Admin } from "./pages/Admin";
-import { Privacy, Terms } from "./pages/Legal";
 import { RequireAuth } from "./components/RequireAuth";
+
+const Register = lazy(() => import("./pages/Register").then((module) => ({ default: module.Register })));
+const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
+const AdAdder = lazy(() => import("./pages/AdAdder").then((module) => ({ default: module.AdAdder })));
+const MyAds = lazy(() => import("./pages/MyAds").then((module) => ({ default: module.MyAds })));
+const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
+const ServiceDetails = lazy(() => import("./pages/ServiceDetails").then((module) => ({ default: module.ServiceDetails })));
+const AdEditor = lazy(() => import("./pages/AdEditor").then((module) => ({ default: module.AdEditor })));
+const Responses = lazy(() => import("./pages/Responses").then((module) => ({ default: module.Responses })));
+const Admin = lazy(() => import("./pages/Admin").then((module) => ({ default: module.Admin })));
+const Terms = lazy(() => import("./pages/Legal").then((module) => ({ default: module.Terms })));
+const Privacy = lazy(() => import("./pages/Legal").then((module) => ({ default: module.Privacy })));
 
 function App() {
   return (
@@ -21,6 +24,7 @@ function App() {
       <Header />
       
       <main className="flex-1">
+        <Suspense fallback={<div className="page-shell"><div className="empty-state">Загружаем страницу…</div></div>}>
           <Routes>
             <Route path="/" element={<Home />}></Route>
             <Route path="/register" element={<Register />}></Route>
@@ -37,6 +41,7 @@ function App() {
             <Route path="/privacy" element={<Privacy />}></Route>
             <Route path="*" element={<div className="p-12 text-center text-xl">Страница не найдена</div>}></Route>
           </Routes>
+        </Suspense>
       </main>
       
       <Footer />

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     api,
     getApiErrorMessage,
-    type ServiceListing,
+    type ServiceSummary,
     type Category,
     type ServiceFilters,
 } from '../api/Api';
@@ -19,7 +19,7 @@ export const Home = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(!!getToken());
     const navigate = useNavigate();
 
-    const [ads, setAds] = useState<ServiceListing[]>([]);
+    const [ads, setAds] = useState<ServiceSummary[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [search, setSearch] = useState('');
     const [appliedSearch, setAppliedSearch] = useState('');
@@ -259,7 +259,7 @@ export const Home = () => {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                            {ads.map((service) => <ServiceCard key={service.id} service={service} onOpen={() => navigate(`/services/${service.id}`)} />)}
+                            {ads.map((service) => <ServiceCard key={service.id} service={service} />)}
                         </div>
                     )}
 

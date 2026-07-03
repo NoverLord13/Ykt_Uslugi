@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getToken } from '../api/auth';
 import { api } from '../api/Api';
+import { clearUserCache } from '../api/cache';
 
 export const Header = () => {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ export const Header = () => {
       const authenticated = !!getToken();
       setIsAuthenticated(authenticated);
       if (authenticated) api.getMe().then((user) => setIsAdmin(!!user.is_admin)).catch(() => setIsAdmin(false));
-      else setIsAdmin(false);
+      else { clearUserCache(); setIsAdmin(false); }
     };
     updateAuth();
     window.addEventListener('auth-change', updateAuth);
@@ -29,6 +30,7 @@ export const Header = () => {
   useEffect(() => { setIsMenuOpen(false); }, [location.pathname]);
 
   const handleLogout = () => {
+    clearUserCache();
     localStorage.removeItem('access_token');
     window.dispatchEvent(new Event('auth-change'));
     navigate('/');

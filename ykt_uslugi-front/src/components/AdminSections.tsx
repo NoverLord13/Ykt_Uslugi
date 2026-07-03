@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { Report, Review, ServiceListing, ServiceResponse, UserProfile } from '../api/Api';
+import type { Report, Review, ServiceListing, ServiceResponse, ServiceSummary, UserProfile } from '../api/Api';
 
 const reportReasons: Record<string, string> = {
   spam: 'Спам или реклама', fraud: 'Мошенничество', abuse: 'Оскорбления',
@@ -42,7 +42,7 @@ export const ReviewsSection = ({ items, onDelete }: { items: Review[]; onDelete:
   </div>)}</div>
 </section>;
 
-export const ServicesSection = ({ items, onStatusChange }: { items: ServiceListing[]; onStatusChange: (id: number, status: ServiceListing['status']) => Promise<void> }) => <section>
+export const ServicesSection = ({ items, onStatusChange }: { items: ServiceSummary[]; onStatusChange: (id: number, status: ServiceListing['status']) => Promise<void> }) => <section>
   <h2 className="mb-3 text-xl font-bold">Объявления</h2>
   <div className="grid gap-2">{items.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3">
     <Link to={`/services/${item.id}`} className="font-semibold hover:text-[#2F6FED]">{item.title}</Link>

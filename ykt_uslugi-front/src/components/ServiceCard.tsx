@@ -1,12 +1,16 @@
-import { fileUrl, formatPrice, listingTypeLabel, type ServiceListing } from '../api/Api';
+import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { fileUrl, formatPrice, listingTypeLabel, type ServiceSummary } from '../api/Api';
 
-export const ServiceCard = ({ service, onOpen }: { service: ServiceListing; onOpen: () => void }) => <article
-  onClick={onOpen}
+export const ServiceCard = memo(({ service }: { service: ServiceSummary }) => {
+  const navigate = useNavigate();
+  return <article
+  onClick={() => navigate(`/services/${service.id}`)}
   className="group cursor-pointer overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_10px_35px_rgb(23_34_52/0.06)] transition duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-[0_20px_50px_rgb(23_34_52/0.12)]"
 >
   <div className="aspect-[4/3] overflow-hidden bg-[#F2F3F5]">
-    {(service.image_url || service.images[0]?.url) ? <img
-      src={fileUrl(service.images[0]?.url || service.image_url)}
+    {(service.image_url || service.images[0]?.url) ? <img loading="lazy" decoding="async"
+      src={fileUrl(service.images[0]?.thumbnail_url || service.image_thumbnail_url || service.images[0]?.url || service.image_url)}
       alt={service.title}
       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
     /> : <div className="flex h-full items-center justify-center text-slate-400">Нет фото</div>}
@@ -24,3 +28,4 @@ export const ServiceCard = ({ service, onOpen }: { service: ServiceListing; onOp
     </div>
   </div>
 </article>;
+});

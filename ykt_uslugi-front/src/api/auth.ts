@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { clearUserCache } from "./cache";
 
 export interface UserRead {
   id: number;
@@ -72,6 +73,7 @@ export function verifyLoginCode(phone: string, code: string) {
 }
 
 export function saveToken(token: string) {
+  clearUserCache();
   localStorage.setItem("access_token", token);
 }
 
