@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+import asyncio
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only, selectinload
 
 from database import get_db
 from dependencies import get_current_user
@@ -8,7 +10,7 @@ from models.review import Review
 from models.response import ServiceResponse
 from models.service import Service
 from models.user import User
-from schemas.common import ApiResponse, CurrentUserProfileRead, ReviewRead, ServiceRead, UserProfileRead
+from schemas.common import ApiResponse, CurrentUserProfileRead, ReviewRead, ServiceSummaryRead, UserProfileRead
 from schemas.user import ReviewCreate, UserProfileUpdate
 from services.files import delete_upload, save_upload
 from services.reports import delete_target_reports
@@ -72,10 +74,10 @@ async def upload_avatar(
         db.commit()
     except Exception:
         db.rollback()
-        delete_upload(new_avatar_url)
+        await asyncio.to_thread(delete_upload, new_avatar_url)
         raise
     db.refresh(current_user)
-    delete_upload(old_avatar_url)
+    await asyncio.to_thread(delete_upload, old_avatar_url)
     return ApiResponse(message="Аватар обновлен", data=_profile_response(current_user, db, private=True))
 
 
@@ -87,22 +89,38 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)):
     return ApiResponse(message="Профиль пользователя", data=_profile_response(user, db))
 
 
-@router.get("/{user_id}/services", response_model=ApiResponse[list[ServiceRead]])
-def get_user_services(user_id: int, db: Session = Depends(get_db)):
+@router.get("/{user_id}/services", response_model=ApiResponse[list[ServiceSummaryRead]])
+def get_user_services(
+    user_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
     if not db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
     services = (
         db.query(Service)
+        .options(
+            load_only(Service.id, Service.owner_id, Service.title, Service.price, Service.listing_type, Service.category_id, Service.subcategory_id, Service.location, Service.price_type, Service.status, Service.image_url, Service.is_active, Service.created_at, Service.updated_at),
+            joinedload(Service.owner), joinedload(Service.category), joinedload(Service.subcategory), selectinload(Service.images),
+        )
         .filter(Service.owner_id == user_id, Service.is_active.is_(True), Service.status == "active")
         .order_by(Service.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
-    return ApiResponse(message="Объявления пользователя", data=[ServiceRead.model_validate(s) for s in services])
+    return ApiResponse(message="Объявления пользователя", data=[ServiceSummaryRead.model_validate(s) for s in services])
 
 
 @router.get("/{user_id}/reviews", response_model=ApiResponse[list[ReviewRead]])
-def get_user_reviews(user_id: int, db: Session = Depends(get_db)):
+def get_user_reviews(
+    user_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
     if not db.query(User).filter(User.id == user_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
@@ -111,6 +129,8 @@ def get_user_reviews(user_id: int, db: Session = Depends(get_db)):
         .options(joinedload(Review.author), joinedload(Review.target_user))
         .filter(Review.target_user_id == user_id)
         .order_by(Review.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     return ApiResponse(message="Отзывы пользователя", data=[ReviewRead.model_validate(r) for r in reviews])

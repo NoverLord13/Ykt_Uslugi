@@ -1,8 +1,9 @@
+import asyncio
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, load_only, selectinload
 
 from core.domain_types import ListingType, PriceType, ServiceSort, ServiceStatus
 from database import get_db
@@ -10,7 +11,7 @@ from dependencies import get_current_user, get_optional_user
 from models.response import ServiceResponse
 from models.service import Category, Service, ServiceImage
 from models.user import User
-from schemas.common import ApiResponse, ServiceRead
+from schemas.common import ApiResponse, ServiceRead, ServiceSummaryRead
 from services.files import delete_upload, save_uploads
 from services.listings import ListingValidationError, apply_service_update, collect_uploads, normalize_price, validate_category_pair
 from services.reports import delete_target_reports
@@ -22,6 +23,10 @@ def _to_service_read(service: Service) -> ServiceRead:
     return ServiceRead.model_validate(service)
 
 
+def _to_service_summary(service: Service) -> ServiceSummaryRead:
+    return ServiceSummaryRead.model_validate(service)
+
+
 def _service_load_options():
     return (
         joinedload(Service.owner),
@@ -31,7 +36,21 @@ def _service_load_options():
     )
 
 
-@router.get("", response_model=ApiResponse[list[ServiceRead]])
+def _service_summary_options():
+    return (
+        load_only(
+            Service.id, Service.owner_id, Service.title, Service.price, Service.listing_type,
+            Service.category_id, Service.subcategory_id, Service.location, Service.price_type,
+            Service.status, Service.image_url, Service.is_active, Service.created_at, Service.updated_at,
+        ),
+        joinedload(Service.owner),
+        joinedload(Service.category),
+        joinedload(Service.subcategory),
+        selectinload(Service.images),
+    )
+
+
+@router.get("", response_model=ApiResponse[list[ServiceSummaryRead]])
 def list_services(
     q: str | None = Query(None, min_length=1, max_length=200),
     listing_type: ListingType | None = None,
@@ -48,7 +67,7 @@ def list_services(
         raise HTTPException(status_code=400, detail="Минимальная цена не может быть больше максимальной")
     query = (
         db.query(Service)
-        .options(*_service_load_options())
+        .options(*_service_summary_options())
         .filter(Service.is_active.is_(True), Service.status == "active")
     )
 
@@ -78,17 +97,19 @@ def list_services(
     services = query.offset(skip).limit(limit).all()
     return ApiResponse(
         message="Список услуг",
-        data=[_to_service_read(s) for s in services],
+        data=[_to_service_summary(s) for s in services],
     )
 
 
 @router.get("/mine", response_model=ApiResponse[list[ServiceRead]])
-def list_my_services(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_my_services(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     services = (
         db.query(Service)
         .options(*_service_load_options())
         .filter(Service.owner_id == current_user.id)
         .order_by(Service.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     return ApiResponse(
@@ -178,8 +199,7 @@ async def create_service(
         db.commit()
     except Exception:
         db.rollback()
-        for url in image_urls:
-            delete_upload(url)
+        await asyncio.gather(*(asyncio.to_thread(delete_upload, url) for url in image_urls))
         raise
     db.refresh(service)
     
@@ -259,19 +279,17 @@ async def update_service(
     except Exception:
         db.rollback()
         if upload_files:
-            for url in image_urls:
-                delete_upload(url)
+            await asyncio.gather(*(asyncio.to_thread(delete_upload, url) for url in image_urls))
         raise
     if upload_files or clear_images:
-        for url in old_image_urls:
-            if not upload_files or url not in image_urls:
-                delete_upload(url)
+        urls_to_delete = [url for url in old_image_urls if not upload_files or url not in image_urls]
+        await asyncio.gather(*(asyncio.to_thread(delete_upload, url) for url in urls_to_delete))
     db.refresh(service)
     service = db.query(Service).options(*_service_load_options()).filter(Service.id == service.id).first()
     return ApiResponse(message="Услуга обновлена", data=_to_service_read(service))
 
 
-@router.get("/{service_id}/similar", response_model=ApiResponse[list[ServiceRead]])
+@router.get("/{service_id}/similar", response_model=ApiResponse[list[ServiceSummaryRead]])
 def get_similar_services(service_id: int, limit: int = Query(8, ge=1, le=20), db: Session = Depends(get_db)):
     service = db.query(Service).filter(Service.id == service_id, Service.is_active.is_(True)).first()
     if not service:
@@ -279,7 +297,7 @@ def get_similar_services(service_id: int, limit: int = Query(8, ge=1, le=20), db
 
     base_query = (
         db.query(Service)
-        .options(*_service_load_options())
+        .options(*_service_summary_options())
         .filter(
             Service.id != service_id,
             Service.is_active.is_(True),
@@ -302,7 +320,7 @@ def get_similar_services(service_id: int, limit: int = Query(8, ge=1, le=20), db
         )
         results.extend(category_results)
 
-    return ApiResponse(message="Похожие объявления", data=[_to_service_read(s) for s in results])
+    return ApiResponse(message="Похожие объявления", data=[_to_service_summary(s) for s in results])
 
 
 @router.delete("/{service_id}", response_model=ApiResponse[None])

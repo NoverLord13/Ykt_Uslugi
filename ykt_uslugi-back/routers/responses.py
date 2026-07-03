@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
@@ -97,11 +97,28 @@ def create_response(
     return ApiResponse(message="Отклик отправлен", data=_to_response_read(response, current_user))
 
 
+@router.get("/services/{service_id}/my-response", response_model=ApiResponse[ResponseRead | None])
+def get_my_active_response(
+    service_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    item = db.query(ServiceResponse).options(*_response_options()).filter(
+        ServiceResponse.service_id == service_id,
+        ServiceResponse.respondent_id == current_user.id,
+        ServiceResponse.status.in_(ACTIVE_STATUSES),
+    ).order_by(ServiceResponse.updated_at.desc()).first()
+    if not item:
+        return ApiResponse(message="Активный отклик отсутствует", data=None)
+    reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id])
+    return ApiResponse(message="Активный отклик", data=_to_response_read(item, current_user, item.id in reviewed_ids))
+
+
 @router.get("/responses/sent", response_model=ApiResponse[list[ResponseRead]])
-def sent_responses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def sent_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     items = db.query(ServiceResponse).options(*_response_options()).filter(
         ServiceResponse.respondent_id == current_user.id
-    ).order_by(ServiceResponse.created_at.desc()).all()
+    ).order_by(ServiceResponse.created_at.desc()).offset(skip).limit(limit).all()
     reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id for item in items])
     return ApiResponse(message="Исходящие отклики", data=[
         _to_response_read(item, current_user, item.id in reviewed_ids) for item in items
@@ -109,10 +126,10 @@ def sent_responses(current_user: User = Depends(get_current_user), db: Session =
 
 
 @router.get("/responses/received", response_model=ApiResponse[list[ResponseRead]])
-def received_responses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def received_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     items = db.query(ServiceResponse).join(Service).options(*_response_options()).filter(
         Service.owner_id == current_user.id
-    ).order_by(ServiceResponse.created_at.desc()).all()
+    ).order_by(ServiceResponse.created_at.desc()).offset(skip).limit(limit).all()
     reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id for item in items])
     return ApiResponse(message="Входящие отклики", data=[
         _to_response_read(item, current_user, item.id in reviewed_ids) for item in items
@@ -144,10 +161,10 @@ def update_response(
 
 
 @router.get("/admin/responses/disputed", response_model=ApiResponse[list[ResponseRead]], tags=["admin"])
-def disputed_responses(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+def disputed_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     items = db.query(ServiceResponse).options(*_response_options()).filter(
         ServiceResponse.status == "disputed"
-    ).order_by(ServiceResponse.updated_at.desc()).all()
+    ).order_by(ServiceResponse.updated_at.desc()).offset(skip).limit(limit).all()
     return ApiResponse(message="Спорные сделки", data=[_to_response_read(item, admin) for item in items])
 
 
@@ -218,8 +235,8 @@ def create_report(
 
 
 @router.get("/admin/reports", response_model=ApiResponse[list[ReportRead]], tags=["admin"])
-def list_reports(_: User = Depends(require_admin), db: Session = Depends(get_db)):
-    reports = db.query(Report).options(joinedload(Report.reporter)).order_by(Report.created_at.desc()).all()
+def list_reports(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    reports = db.query(Report).options(joinedload(Report.reporter)).order_by(Report.created_at.desc()).offset(skip).limit(limit).all()
     return ApiResponse(message="Список жалоб", data=[ReportRead.model_validate(item) for item in reports])
 
 

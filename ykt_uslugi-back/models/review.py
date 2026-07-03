@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -8,7 +8,10 @@ from database import Base
 
 class Review(Base):
     __tablename__ = "reviews"
-    __table_args__ = (UniqueConstraint("author_id", "response_id", name="uq_reviews_author_response"),)
+    __table_args__ = (
+        UniqueConstraint("author_id", "response_id", name="uq_reviews_author_response"),
+        Index("ix_reviews_target_created", "target_user_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)

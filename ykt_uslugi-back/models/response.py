@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, func
+from sqlalchemy import ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -8,6 +8,11 @@ from database import Base
 
 class ServiceResponse(Base):
     __tablename__ = "service_responses"
+    __table_args__ = (
+        Index("ix_responses_respondent_created", "respondent_id", "created_at"),
+        Index("ix_responses_service_status", "service_id", "status"),
+        Index("ix_responses_status_submitted", "status", "work_submitted_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id", ondelete="CASCADE"), index=True)
@@ -26,6 +31,9 @@ class ServiceResponse(Base):
 
 class Report(Base):
     __tablename__ = "reports"
+    __table_args__ = (
+        Index("ix_reports_duplicate_lookup", "reporter_id", "target_type", "target_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)

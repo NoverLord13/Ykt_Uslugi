@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload, selectinload
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session, joinedload, load_only, selectinload
 
 from database import get_db
 from dependencies import require_admin
 from models.review import Review
 from models.service import Category, Service, Subcategory
 from models.user import User
-from schemas.common import ApiResponse, CategoryRead, ReviewRead, ServiceRead, SubcategoryRead, UserRead
+from schemas.common import ApiResponse, CategoryRead, ReviewRead, ServiceRead, ServiceSummaryRead, SubcategoryRead, UserRead
 from schemas.service import AdminServiceUpdate, AdminUserUpdate, CategoryCreate, CategoryUpdate, SubcategoryCreate, SubcategoryUpdate
 from services.reports import delete_target_reports
 
@@ -14,8 +14,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/users", response_model=ApiResponse[list[UserRead]])
-def list_users(_: User = Depends(require_admin), db: Session = Depends(get_db)):
-    users = db.query(User).order_by(User.created_at.desc()).all()
+def list_users(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    users = db.query(User).order_by(User.created_at.desc()).offset(skip).limit(limit).all()
     return ApiResponse(
         message="Список пользователей",
         data=[UserRead.model_validate(u) for u in users],
@@ -45,22 +45,25 @@ def update_user(
     return ApiResponse(message="Пользователь обновлён", data=UserRead.model_validate(user))
 
 
-@router.get("/services", response_model=ApiResponse[list[ServiceRead]])
-def list_all_services(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+@router.get("/services", response_model=ApiResponse[list[ServiceSummaryRead]])
+def list_all_services(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), _: User = Depends(require_admin), db: Session = Depends(get_db)):
     services = (
         db.query(Service)
         .options(
+            load_only(Service.id, Service.owner_id, Service.title, Service.price, Service.listing_type, Service.category_id, Service.subcategory_id, Service.location, Service.price_type, Service.status, Service.image_url, Service.is_active, Service.created_at, Service.updated_at),
             joinedload(Service.owner),
-            joinedload(Service.category).selectinload(Category.subcategories),
+            joinedload(Service.category),
             joinedload(Service.subcategory),
             selectinload(Service.images),
         )
         .order_by(Service.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     return ApiResponse(
         message="Список всех услуг",
-        data=[ServiceRead.model_validate(s) for s in services],
+        data=[ServiceSummaryRead.model_validate(s) for s in services],
     )
 
 
@@ -213,8 +216,8 @@ def admin_delete_subcategory(subcategory_id: int, _: User = Depends(require_admi
 
 
 @router.get("/reviews", response_model=ApiResponse[list[ReviewRead]])
-def admin_list_reviews(_: User = Depends(require_admin), db: Session = Depends(get_db)):
-    reviews = db.query(Review).order_by(Review.created_at.desc()).all()
+def admin_list_reviews(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    reviews = db.query(Review).options(joinedload(Review.author), joinedload(Review.target_user)).order_by(Review.created_at.desc()).offset(skip).limit(limit).all()
     return ApiResponse(message="Список отзывов", data=[ReviewRead.model_validate(r) for r in reviews])
 
 
