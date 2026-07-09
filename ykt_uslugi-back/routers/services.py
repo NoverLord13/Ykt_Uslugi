@@ -1,24 +1,30 @@
+import asyncio
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import or_
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, load_only, selectinload
 
+from core.domain_types import ListingType, PriceType, ServiceSort, ServiceStatus
 from database import get_db
 from dependencies import get_current_user, get_optional_user
 from models.response import ServiceResponse
-from models.service import Category, Service, ServiceImage, Subcategory
+from models.service import Category, Service, ServiceImage
 from models.user import User
-from schemas.common import ApiResponse, ServiceRead
-from schemas.service import ServiceUpdate
+from schemas.common import ApiResponse, ServiceRead, ServiceSummaryRead
 from services.files import delete_upload, save_uploads
+from services.listings import ListingValidationError, apply_service_update, collect_uploads, normalize_price, validate_category_pair
+from services.reports import delete_target_reports
 
 router = APIRouter(prefix="/services", tags=["services"])
-MAX_SERVICE_IMAGES = 8
 
 
 def _to_service_read(service: Service) -> ServiceRead:
     return ServiceRead.model_validate(service)
+
+
+def _to_service_summary(service: Service) -> ServiceSummaryRead:
+    return ServiceSummaryRead.model_validate(service)
 
 
 def _service_load_options():
@@ -30,41 +36,38 @@ def _service_load_options():
     )
 
 
-def _validate_category_pair(db: Session, category_id: int | None, subcategory_id: int | None) -> None:
-    if category_id is not None and not db.query(Category).filter(Category.id == category_id).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Категория не найдена")
-
-    if subcategory_id is not None:
-        if category_id is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Сначала выберите категорию")
-        subcategory = db.query(Subcategory).filter(Subcategory.id == subcategory_id).first()
-        if not subcategory:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Подкатегория не найдена")
-        if category_id is not None and subcategory.category_id != category_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Подкатегория не принадлежит выбранной категории",
-            )
+def _service_summary_options():
+    return (
+        load_only(
+            Service.id, Service.owner_id, Service.title, Service.price, Service.listing_type,
+            Service.category_id, Service.subcategory_id, Service.location, Service.price_type,
+            Service.status, Service.image_url, Service.is_active, Service.created_at, Service.updated_at,
+        ),
+        joinedload(Service.owner),
+        joinedload(Service.category),
+        joinedload(Service.subcategory),
+        selectinload(Service.images),
+    )
 
 
-@router.get("", response_model=ApiResponse[list[ServiceRead]])
+@router.get("", response_model=ApiResponse[list[ServiceSummaryRead]])
 def list_services(
     q: str | None = Query(None, min_length=1, max_length=200),
-    listing_type: str | None = Query(None, pattern=r"^(offer|request)$"),
+    listing_type: ListingType | None = None,
     category_id: int | None = None,
     subcategory_id: int | None = None,
     min_price: Decimal | None = Query(None, ge=0),
     max_price: Decimal | None = Query(None, ge=0),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    sort: str = Query("newest", pattern=r"^(newest|oldest|price_asc|price_desc)$"),
+    sort: ServiceSort = "newest",
     db: Session = Depends(get_db),
 ):
     if min_price is not None and max_price is not None and min_price > max_price:
         raise HTTPException(status_code=400, detail="Минимальная цена не может быть больше максимальной")
     query = (
         db.query(Service)
-        .options(*_service_load_options())
+        .options(*_service_summary_options())
         .filter(Service.is_active.is_(True), Service.status == "active")
     )
 
@@ -94,17 +97,19 @@ def list_services(
     services = query.offset(skip).limit(limit).all()
     return ApiResponse(
         message="Список услуг",
-        data=[_to_service_read(s) for s in services],
+        data=[_to_service_summary(s) for s in services],
     )
 
 
 @router.get("/mine", response_model=ApiResponse[list[ServiceRead]])
-def list_my_services(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_my_services(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     services = (
         db.query(Service)
         .options(*_service_load_options())
         .filter(Service.owner_id == current_user.id)
         .order_by(Service.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     return ApiResponse(
@@ -150,32 +155,27 @@ async def create_service(
     title: str = Form(..., min_length=1, max_length=200),
     description: str = Form(..., min_length=1, max_length=5000),
     price: Decimal | None = Form(None, ge=0),
-    listing_type: str = Form("offer", pattern=r"^(offer|request)$"),
+    listing_type: ListingType = Form("offer"),
     category_id: int | None = Form(None),
     subcategory_id: int | None = Form(None),
     location: str | None = Form(None, max_length=200),
-    price_type: str = Form("fixed", pattern=r"^(fixed|from|negotiable)$"),
+    price_type: PriceType = Form("fixed"),
     contact_phone: str | None = Form(None, max_length=20),
     image: UploadFile | None = File(None),
     images: list[UploadFile] | None = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _validate_category_pair(db, category_id, subcategory_id)
     title = title.strip()
     description = description.strip()
     if not title or not description:
         raise HTTPException(status_code=400, detail="Название и описание не могут состоять из пробелов")
-    if price_type != "negotiable" and (price is None or price <= 0):
-        raise HTTPException(status_code=400, detail="Укажите цену больше нуля или выберите договорную цену")
-    if price_type == "negotiable":
-        price = None
-
-    upload_files = [file for file in (images or []) if file and file.filename]
-    if image and image.filename:
-        upload_files.insert(0, image)
-    if len(upload_files) > MAX_SERVICE_IMAGES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Можно загрузить максимум 8 фото")
+    try:
+        validate_category_pair(db, category_id, subcategory_id)
+        price = normalize_price(price_type, price)
+        upload_files = collect_uploads(image, images)
+    except ListingValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     image_urls = await save_uploads(upload_files)
     image_url = image_urls[0] if image_urls else None
@@ -199,8 +199,7 @@ async def create_service(
         db.commit()
     except Exception:
         db.rollback()
-        for url in image_urls:
-            delete_upload(url)
+        await asyncio.gather(*(asyncio.to_thread(delete_upload, url) for url in image_urls))
         raise
     db.refresh(service)
     
@@ -220,14 +219,14 @@ async def update_service(
     title: str | None = Form(None, min_length=1, max_length=200),
     description: str | None = Form(None, min_length=1, max_length=5000),
     price: Decimal | None = Form(None, ge=0),
-    listing_type: str | None = Form(None, pattern=r"^(offer|request)$"),
+    listing_type: ListingType | None = Form(None),
     category_id: int | None = Form(None),
     subcategory_id: int | None = Form(None),
     clear_category: bool = Form(False),
     clear_subcategory: bool = Form(False),
     location: str | None = Form(None, max_length=200),
-    price_type: str | None = Form(None, pattern=r"^(fixed|from|negotiable)$"),
-    status_value: str | None = Form(None, alias="status", pattern=r"^(active|hidden|moderation|closed)$"),
+    price_type: PriceType | None = Form(None),
+    status_value: ServiceStatus | None = Form(None, alias="status"),
     contact_phone: str | None = Form(None, max_length=20),
     clear_images: bool = Form(False),
     image: UploadFile | None = File(None),
@@ -241,54 +240,33 @@ async def update_service(
     if service.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Можно редактировать только свои услуги")
 
-    if title is not None:
-        service.title = title.strip()
-        if not service.title:
-            raise HTTPException(status_code=400, detail="Название не может состоять из пробелов")
-    if description is not None:
-        service.description = description.strip()
-        if not service.description:
-            raise HTTPException(status_code=400, detail="Описание не может состоять из пробелов")
-    if price is not None:
-        service.price = price
-    if listing_type is not None:
-        service.listing_type = listing_type
-    if category_id is not None or subcategory_id is not None or clear_category or clear_subcategory:
-        next_category_id = None if clear_category else category_id if category_id is not None else service.category_id
-        next_subcategory_id = None if clear_category or clear_subcategory else subcategory_id if subcategory_id is not None else service.subcategory_id
-        _validate_category_pair(db, next_category_id, next_subcategory_id)
-        service.category_id = next_category_id
-        service.subcategory_id = next_subcategory_id
-    if location is not None:
-        service.location = location
-    if price_type is not None:
-        service.price_type = price_type
-        if price_type == "negotiable":
-            service.price = None
-        elif service.price is None:
-            raise HTTPException(status_code=400, detail="Для выбранного типа цены укажите стоимость")
-    if status_value is not None:
-        if service.status == "moderation" and status_value != "moderation":
-            raise HTTPException(status_code=403, detail="Объявление на модерации может опубликовать только администратор")
-        if service.status != "moderation" and status_value == "moderation":
-            raise HTTPException(status_code=400, detail="Отправить объявление на модерацию может только администратор")
-        service.status = status_value
-        service.is_active = status_value == "active"
-    if contact_phone is not None:
-        service.contact_phone = contact_phone or current_user.phone_number
-    if service.price_type != "negotiable" and (service.price is None or service.price <= 0):
-        raise HTTPException(status_code=400, detail="Укажите цену больше нуля или выберите договорную цену")
-    upload_files = [file for file in (images or []) if file and file.filename]
-    if image and image.filename:
-        upload_files.insert(0, image)
+    try:
+        apply_service_update(
+            db,
+            service,
+            owner_phone=current_user.phone_number,
+            title=title,
+            description=description,
+            price=price,
+            listing_type=listing_type,
+            category_id=category_id,
+            subcategory_id=subcategory_id,
+            clear_category=clear_category,
+            clear_subcategory=clear_subcategory,
+            location=location,
+            price_type=price_type,
+            status_value=status_value,
+            contact_phone=contact_phone,
+        )
+        upload_files = collect_uploads(image, images)
+    except ListingValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     old_image_urls: set[str] = set()
     if upload_files or clear_images:
         old_image_urls = {stored_image.url for stored_image in service.images}
         if service.image_url:
             old_image_urls.add(service.image_url)
     if upload_files:
-        if len(upload_files) > MAX_SERVICE_IMAGES:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Можно загрузить максимум 8 фото")
         image_urls = await save_uploads(upload_files)
         service.images = [ServiceImage(url=url, position=index) for index, url in enumerate(image_urls)]
         service.image_url = image_urls[0]
@@ -301,19 +279,17 @@ async def update_service(
     except Exception:
         db.rollback()
         if upload_files:
-            for url in image_urls:
-                delete_upload(url)
+            await asyncio.gather(*(asyncio.to_thread(delete_upload, url) for url in image_urls))
         raise
     if upload_files or clear_images:
-        for url in old_image_urls:
-            if not upload_files or url not in image_urls:
-                delete_upload(url)
+        urls_to_delete = [url for url in old_image_urls if not upload_files or url not in image_urls]
+        await asyncio.gather(*(asyncio.to_thread(delete_upload, url) for url in urls_to_delete))
     db.refresh(service)
     service = db.query(Service).options(*_service_load_options()).filter(Service.id == service.id).first()
     return ApiResponse(message="Услуга обновлена", data=_to_service_read(service))
 
 
-@router.get("/{service_id}/similar", response_model=ApiResponse[list[ServiceRead]])
+@router.get("/{service_id}/similar", response_model=ApiResponse[list[ServiceSummaryRead]])
 def get_similar_services(service_id: int, limit: int = Query(8, ge=1, le=20), db: Session = Depends(get_db)):
     service = db.query(Service).filter(Service.id == service_id, Service.is_active.is_(True)).first()
     if not service:
@@ -321,7 +297,7 @@ def get_similar_services(service_id: int, limit: int = Query(8, ge=1, le=20), db
 
     base_query = (
         db.query(Service)
-        .options(*_service_load_options())
+        .options(*_service_summary_options())
         .filter(
             Service.id != service_id,
             Service.is_active.is_(True),
@@ -344,7 +320,7 @@ def get_similar_services(service_id: int, limit: int = Query(8, ge=1, le=20), db
         )
         results.extend(category_results)
 
-    return ApiResponse(message="Похожие объявления", data=[_to_service_read(s) for s in results])
+    return ApiResponse(message="Похожие объявления", data=[_to_service_summary(s) for s in results])
 
 
 @router.delete("/{service_id}", response_model=ApiResponse[None])
@@ -368,6 +344,7 @@ def delete_service(
     image_urls = {image.url for image in service.images}
     if service.image_url:
         image_urls.add(service.image_url)
+    delete_target_reports(db, "service", service.id)
     db.delete(service)
     db.commit()
     for url in image_urls:

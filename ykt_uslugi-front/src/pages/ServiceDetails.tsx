@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type AdBlock, type ServiceResponse, type UserProfile } from '../api/Api';
+import { ACTIVE_DEAL_STATUSES, api, fileUrl, formatPrice, getApiErrorMessage, listingTypeLabel, type ServiceListing, type ServiceSummary, type ServiceResponse, type UserProfile } from '../api/Api';
 import { getToken } from '../api/auth';
 import { ReportModal } from '../components/FeedbackModals';
 
@@ -10,26 +10,31 @@ const PhoneIcon = () => <svg viewBox="0 0 24 24" aria-hidden="true" className="h
 
 export const ServiceDetails = () => {
   const { id } = useParams(); const navigate = useNavigate(); const serviceId = Number(id);
-  const [ad, setAd] = useState<AdBlock | null>(null); const [similar, setSimilar] = useState<AdBlock[]>([]); const [activeImage, setActiveImage] = useState('');
+  const [ad, setAd] = useState<ServiceListing | null>(null); const [similar, setSimilar] = useState<ServiceSummary[]>([]); const [activeImage, setActiveImage] = useState('');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null); const [activeResponse, setActiveResponse] = useState<ServiceResponse | null>(null);
   const [responseMessage, setResponseMessage] = useState(''); const [showPhone, setShowPhone] = useState(false); const [reportOpen, setReportOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState(''); const [actionError, setActionError] = useState(false); const [loading, setLoading] = useState(true); const [responding, setResponding] = useState(false); const [error, setError] = useState('');
 
   useEffect(() => {
     if (!serviceId) { setError('Некорректный адрес объявления'); setLoading(false); return; }
+    let cancelled = false;
     const load = async () => {
       setLoading(true); setError('');
       try {
-        const data = await api.getAdBlockById(serviceId); setAd(data); setActiveImage(data.images[0]?.url || data.image_url || '');
-        api.getSimilarServices(serviceId).then(setSimilar).catch(() => setSimilar([]));
+        const data = await api.getServiceListingById(serviceId);
+        if (cancelled) return;
+        setAd(data); setActiveImage(data.images[0]?.url || data.image_url || '');
+        api.getSimilarServices(serviceId).then((items) => { if (!cancelled) setSimilar(items); }).catch(() => { if (!cancelled) setSimilar([]); });
         if (getToken()) {
-          const [user, responses] = await Promise.all([api.getMe(), api.getSentResponses()]);
-          setCurrentUser(user); setActiveResponse(responses.find(item => item.service.id === serviceId && ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'].includes(item.status)) || null);
+          const [user, response] = await Promise.all([api.getMe(), api.getMyActiveResponse(serviceId)]);
+          if (cancelled) return;
+          setCurrentUser(user); setActiveResponse(response && ACTIVE_DEAL_STATUSES.includes(response.status) ? response : null);
         }
-      } catch (err) { setError(getApiErrorMessage(err, 'Не удалось открыть объявление')); }
-      finally { setLoading(false); }
+      } catch (err) { if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось открыть объявление')); }
+      finally { if (!cancelled) setLoading(false); }
     };
     void load();
+    return () => { cancelled = true; };
   }, [serviceId]);
 
   const respond = async () => {
@@ -58,10 +63,10 @@ export const ServiceDetails = () => {
       <div className="min-w-0 space-y-6">
         <section aria-label="Фотографии объявления">
           <div className="relative overflow-hidden rounded-[28px] border border-[var(--line)] bg-[#eef1f3]">
-            {activeImage ? <img src={fileUrl(activeImage)} alt={ad.title} className="aspect-[4/3] w-full object-cover sm:aspect-[16/10]"/> : <div className="grid aspect-[4/3] place-items-center sm:aspect-[16/10]"><div className="text-center text-[var(--muted)]"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white text-2xl shadow-sm">⌂</div><p className="mt-3 text-sm font-semibold">Автор не добавил фотографии</p></div></div>}
+            {activeImage ? <img loading="eager" fetchPriority="high" decoding="async" src={fileUrl(activeImage)} alt={ad.title} className="aspect-[4/3] w-full object-cover sm:aspect-[16/10]"/> : <div className="grid aspect-[4/3] place-items-center sm:aspect-[16/10]"><div className="text-center text-[var(--muted)]"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white text-2xl shadow-sm">⌂</div><p className="mt-3 text-sm font-semibold">Автор не добавил фотографии</p></div></div>}
             {images.length > 1 && <span className="absolute bottom-4 right-4 rounded-full bg-[#172234]/75 px-3 py-1.5 text-xs font-bold text-white backdrop-blur">{images.findIndex(item => item.url === activeImage) + 1} / {images.length}</span>}
           </div>
-          {images.length > 1 && <div className="mt-3 flex gap-3 overflow-x-auto pb-1">{images.map(image => <button type="button" key={`${image.id}-${image.url}`} onClick={() => setActiveImage(image.url)} aria-label="Открыть фотографию" className={`h-20 w-24 flex-none overflow-hidden rounded-2xl border-2 bg-[#eef1f3] transition ${activeImage === image.url ? 'border-[var(--brand)] opacity-100' : 'border-transparent opacity-70 hover:opacity-100'}`}><img src={fileUrl(image.url)} alt="" className="h-full w-full object-cover"/></button>)}</div>}
+          {images.length > 1 && <div className="mt-3 flex gap-3 overflow-x-auto pb-1">{images.map(image => <button type="button" key={`${image.id}-${image.url}`} onClick={() => setActiveImage(image.url)} aria-label="Открыть фотографию" className={`h-20 w-24 flex-none overflow-hidden rounded-2xl border-2 bg-[#eef1f3] transition ${activeImage === image.url ? 'border-[var(--brand)] opacity-100' : 'border-transparent opacity-70 hover:opacity-100'}`}><img loading="lazy" decoding="async" src={fileUrl(image.url)} alt="" className="h-full w-full object-cover"/></button>)}</div>}
         </section>
 
         <section className="surface p-5 sm:p-7">
@@ -89,12 +94,12 @@ export const ServiceDetails = () => {
 
         {ad.contact_phone && !isOwner && <div className="border-t border-[var(--line)] p-5 sm:p-6"><p className="mb-3 text-xs font-black uppercase tracking-[.1em] text-[var(--muted)]">Связаться напрямую</p>{showPhone ? <a href={`tel:${ad.contact_phone}`} className="button-secondary w-full text-base"><PhoneIcon/>{ad.contact_phone}</a> : <button type="button" onClick={() => setShowPhone(true)} className="button-secondary w-full"><PhoneIcon/>Показать телефон</button>}<a href={`https://wa.me/${ad.contact_phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="mt-2 flex min-h-11 items-center justify-center rounded-[14px] border border-[#bfe8cd] bg-[#edf9f1] px-4 text-sm font-black text-[#17733b] transition hover:bg-[#e2f5e9]">Написать в WhatsApp</a></div>}
 
-        <div className="border-t border-[var(--line)] p-5 sm:p-6"><p className="mb-3 text-xs font-black uppercase tracking-[.1em] text-[var(--muted)]">Автор объявления</p><Link to={`/users/${ad.owner.id}`} className="group flex items-center gap-3 rounded-2xl border border-[var(--line)] p-3 transition hover:border-[#b8c8dc] hover:bg-[#f7f9fb]"><div className="grid h-12 w-12 flex-none place-items-center overflow-hidden rounded-2xl bg-[var(--accent)] text-sm font-black text-white">{ad.owner.avatar_url ? <img src={fileUrl(ad.owner.avatar_url)} alt={authorName} className="h-full w-full object-cover"/> : ad.owner.username.slice(0,2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate font-black text-[var(--ink)]">{authorName}</p><p className="mt-0.5 text-xs text-[var(--muted)]">@{ad.owner.username} · Смотреть профиль</p></div><span className="text-[var(--muted)] transition group-hover:translate-x-1">→</span></Link><div className="mt-3 flex items-start gap-2 rounded-2xl bg-[#f4f6f7] p-3 text-xs leading-5 text-[var(--muted)]"><span className="mt-0.5 text-[#27845c]"><ShieldIcon/></span><span>Договорённости фиксируются в разделе «Сделки». Не переводите предоплату незнакомым людям.</span></div></div>
+        <div className="border-t border-[var(--line)] p-5 sm:p-6"><p className="mb-3 text-xs font-black uppercase tracking-[.1em] text-[var(--muted)]">Автор объявления</p><Link to={`/users/${ad.owner.id}`} className="group flex items-center gap-3 rounded-2xl border border-[var(--line)] p-3 transition hover:border-[#b8c8dc] hover:bg-[#f7f9fb]"><div className="grid h-12 w-12 flex-none place-items-center overflow-hidden rounded-2xl bg-[var(--accent)] text-sm font-black text-white">{ad.owner.avatar_url ? <img loading="lazy" decoding="async" src={fileUrl(ad.owner.avatar_thumbnail_url || ad.owner.avatar_url)} alt={authorName} className="h-full w-full object-cover"/> : ad.owner.username.slice(0,2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate font-black text-[var(--ink)]">{authorName}</p><p className="mt-0.5 text-xs text-[var(--muted)]">@{ad.owner.username} · Смотреть профиль</p></div><span className="text-[var(--muted)] transition group-hover:translate-x-1">→</span></Link><div className="mt-3 flex items-start gap-2 rounded-2xl bg-[#f4f6f7] p-3 text-xs leading-5 text-[var(--muted)]"><span className="mt-0.5 text-[#27845c]"><ShieldIcon/></span><span>Договорённости фиксируются в разделе «Сделки». Не переводите предоплату незнакомым людям.</span></div></div>
         {canInteract && <button type="button" onClick={() => setReportOpen(true)} className="w-full border-t border-[var(--line)] px-6 py-4 text-left text-xs font-bold text-[var(--muted)] transition hover:bg-red-50 hover:text-[var(--danger)]">Пожаловаться на объявление</button>}
       </aside>
     </main>
 
-    {similar.length > 0 && <section className="mt-12"><div className="mb-5 flex items-end justify-between"><div><p className="eyebrow">Ещё варианты</p><h2 className="mt-1 text-2xl font-black text-[var(--ink)]">Похожие объявления</h2></div><Link to="/" className="hidden text-sm font-black text-[var(--brand)] sm:block">Смотреть все →</Link></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{similar.slice(0,4).map(item => <Link key={item.id} to={`/services/${item.id}`} className="surface group overflow-hidden transition hover:-translate-y-1"><div className="aspect-[4/3] overflow-hidden bg-[#eef1f3]">{(item.image_url || item.images[0]?.url) ? <img src={fileUrl(item.images[0]?.url || item.image_url)} alt={item.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105"/> : <div className="grid h-full place-items-center text-2xl text-[var(--muted)]">⌂</div>}</div><div className="p-4"><p className="line-clamp-2 min-h-10 text-sm font-black leading-5 text-[var(--ink)]">{item.title}</p><p className="mt-3 font-black text-[var(--brand)]">{formatPrice(item)}</p>{item.location && <p className="mt-2 truncate text-xs text-[var(--muted)]">{item.location}</p>}</div></Link>)}</div></section>}
+    {similar.length > 0 && <section className="mt-12"><div className="mb-5 flex items-end justify-between"><div><p className="eyebrow">Ещё варианты</p><h2 className="mt-1 text-2xl font-black text-[var(--ink)]">Похожие объявления</h2></div><Link to="/" className="hidden text-sm font-black text-[var(--brand)] sm:block">Смотреть все →</Link></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{similar.slice(0,4).map(item => <Link key={item.id} to={`/services/${item.id}`} className="surface group overflow-hidden transition hover:-translate-y-1"><div className="aspect-[4/3] overflow-hidden bg-[#eef1f3]">{(item.image_url || item.images[0]?.url) ? <img loading="lazy" decoding="async" src={fileUrl(item.images[0]?.thumbnail_url || item.image_thumbnail_url || item.images[0]?.url || item.image_url)} alt={item.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105"/> : <div className="grid h-full place-items-center text-2xl text-[var(--muted)]">⌂</div>}</div><div className="p-4"><p className="line-clamp-2 min-h-10 text-sm font-black leading-5 text-[var(--ink)]">{item.title}</p><p className="mt-3 font-black text-[var(--brand)]">{formatPrice(item)}</p>{item.location && <p className="mt-2 truncate text-xs text-[var(--muted)]">{item.location}</p>}</div></Link>)}</div></section>}
 
     {!isOwner && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--line)] bg-white/95 p-3 shadow-[0_-8px_30px_rgb(23_34_52/0.10)] backdrop-blur md:hidden"><div className="mx-auto flex max-w-lg items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-xs text-[var(--muted)]">{ad.title}</p><p className="truncate font-black text-[var(--ink)]">{formatPrice(ad)}</p></div>{activeResponse ? <Link to="/responses" className="button-primary">Открыть сделку</Link> : <a href="#deal-actions" className="button-primary">{respondLabel}</a>}</div></div>}
     <ReportModal open={reportOpen} targetType="service" targetId={ad.id} onClose={() => setReportOpen(false)} onSuccess={() => { setActionError(false); setActionMessage('Жалоба отправлена модератору'); }} />

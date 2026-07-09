@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getApiErrorMessage, type Category } from '../api/Api';
+import { buildServiceFormData, validateServiceForm } from '../components/serviceForm';
 
 export const AdAdder = () => {
   const navigate = useNavigate(); const [categories, setCategories] = useState<Category[]>([]);
@@ -11,19 +12,28 @@ export const AdAdder = () => {
   const selectedCategory = categories.find(category => String(category.id) === categoryId);
   const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files]);
   useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews]);
-  useEffect(() => { api.getCategories().then(setCategories).catch(err => setError(getApiErrorMessage(err, 'Не удалось загрузить категории'))); api.getMe().then(user => setContactPhone(user.phone_number || '')).catch(() => undefined); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.getCategories(), api.getMe()])
+      .then(([categoryItems, user]) => {
+        if (cancelled) return;
+        setCategories(categoryItems);
+        setContactPhone(user.phone_number || '');
+      })
+      .catch((err) => { if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось подготовить форму')); });
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { setSubcategoryId(''); }, [categoryId]);
   useEffect(() => { if (priceType === 'negotiable') setPrice(''); }, [priceType]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => { const picked = Array.from(event.target.files || []); if (picked.length > 8) setError('Можно добавить не больше 8 фотографий'); setFiles(picked.slice(0, 8)); };
   const submit = async () => {
     setError('');
-    if (title.trim().length < 3) return setError('Название должно содержать минимум 3 символа');
-    if (description.trim().length < 20) return setError('Добавьте немного деталей — минимум 20 символов');
-    if (priceType !== 'negotiable' && (!price || Number(price) <= 0)) return setError('Укажите стоимость больше нуля или выберите договорную цену');
-    const data = new FormData(); data.append('title', title.trim()); data.append('description', description.trim()); data.append('listing_type', listingType); data.append('price_type', priceType);
-    if (priceType !== 'negotiable') data.append('price', price); if (categoryId) data.append('category_id', categoryId); if (subcategoryId) data.append('subcategory_id', subcategoryId); if (location.trim()) data.append('location', location.trim()); if (contactPhone) data.append('contact_phone', contactPhone); files.forEach(file => data.append('images', file));
-    setIsSaving(true); try { const created = await api.addAdBlock(data); navigate(`/services/${created.id}`); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать объявление')); } finally { setIsSaving(false); }
+    const value = { title, description, price, listingType, priceType, categoryId, subcategoryId, location, contactPhone, files };
+    const validationError = validateServiceForm(value, 20, 3);
+    if (validationError) return setError(validationError);
+    const data = buildServiceFormData(value);
+    setIsSaving(true); try { const created = await api.addServiceListing(data); navigate(`/services/${created.id}`); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось опубликовать объявление')); } finally { setIsSaving(false); }
   };
 
   return <div className="page-shell max-w-[980px]">
@@ -40,7 +50,7 @@ export const AdAdder = () => {
           <div className="grid gap-4 sm:grid-cols-2"><label className="field"><span>Категория <small>поможет в поиске</small></span><select value={categoryId} onChange={e => setCategoryId(e.target.value)}><option value="">Выберите категорию</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field"><span>Подкатегория</span><select value={subcategoryId} disabled={!selectedCategory} onChange={e => setSubcategoryId(e.target.value)}><option value="">Выберите подкатегорию</option>{selectedCategory?.subcategories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
           <div className="grid gap-4 sm:grid-cols-2"><label className="field"><span>Где выполнять работу?</span><input value={location} maxLength={200} onChange={e => setLocation(e.target.value)} placeholder="Якутск, район или удалённо" /></label><label className="field"><span>Телефон из профиля</span><input value={contactPhone} disabled readOnly /></label></div>
           <label className="field"><span>Фотографии <small>до 8 файлов</small></span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={handleFileChange} /></label>
-          {previews.length > 0 && <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">{previews.map(({ file, url }) => <div key={`${file.name}-${file.lastModified}`} className="relative aspect-square overflow-hidden rounded-2xl"><img src={url} alt="Предпросмотр" className="h-full w-full object-cover" /></div>)}</div>}
+          {previews.length > 0 && <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">{previews.map(({ file, url }) => <div key={`${file.name}-${file.lastModified}`} className="relative aspect-square overflow-hidden rounded-2xl"><img loading="lazy" decoding="async" src={url} alt="Предпросмотр" className="h-full w-full object-cover" /></div>)}</div>}
           <div className="flex flex-col-reverse gap-3 border-t border-[var(--line)] pt-6 sm:flex-row sm:justify-end"><button onClick={() => navigate(-1)} className="button-secondary">Сохранить не нужно</button><button disabled={isSaving} onClick={submit} className="button-primary">{isSaving ? 'Публикуем…' : 'Опубликовать объявление'}</button></div>
         </div>
       </section>

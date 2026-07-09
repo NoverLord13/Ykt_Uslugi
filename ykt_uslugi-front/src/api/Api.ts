@@ -1,13 +1,7 @@
-import axios from 'axios';
 import { getToken } from './auth';
+import { API_BASE, http, type ApiResponse } from './client';
+import { getCachedCategories, getCachedUser, setCachedUser } from './cache';
 
-export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-
-export interface ApiResponse<T> {
-  success: boolean;
-  message: string;
-  data: T | null;
-}
 
 export interface Subcategory {
   id: number;
@@ -23,9 +17,12 @@ export interface Category {
   subcategories: Subcategory[];
 }
 
+export type CategoryBrief = Omit<Category, 'subcategories'>;
+
 export interface ServiceImage {
   id: number;
   url: string;
+  thumbnail_url: string | null;
   position: number;
 }
 
@@ -34,6 +31,7 @@ export interface UserBrief {
   username: string;
   display_name?: string | null;
   avatar_url?: string | null;
+  avatar_thumbnail_url?: string | null;
   telegram_username?: string | null;
 }
 
@@ -65,7 +63,7 @@ export interface Review {
   created_at: string;
 }
 
-export interface AdBlock {
+export interface ServiceListing {
   id: number;
   title: string;
   description: string;
@@ -78,12 +76,17 @@ export interface AdBlock {
   status: 'active' | 'hidden' | 'moderation' | 'closed';
   contact_phone: string | null;
   image_url: string | null;
+  image_thumbnail_url: string | null;
   images: ServiceImage[];
   is_active: boolean;
   owner: UserBrief;
   created_at: string;
   updated_at: string;
 }
+
+export type ServiceSummary = Omit<ServiceListing, 'description' | 'contact_phone' | 'category'> & {
+  category: CategoryBrief | null;
+};
 
 export interface ServiceFilters {
   q?: string;
@@ -110,12 +113,15 @@ export interface ReviewCreate {
   text?: string;
 }
 
+export type DealStatus = 'new' | 'accepted' | 'work_submitted' | 'revision_requested' | 'disputed' | 'completed' | 'cancelled' | 'declined';
+export const ACTIVE_DEAL_STATUSES: DealStatus[] = ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'];
+
 export interface ServiceResponse {
   id: number;
   service: { id: number; title: string; listing_type: 'offer' | 'request'; owner: UserBrief };
   respondent: UserBrief;
   message: string | null;
-  status: 'new' | 'accepted' | 'work_submitted' | 'revision_requested' | 'disputed' | 'completed' | 'cancelled' | 'declined';
+  status: DealStatus;
   status_note: string | null;
   work_submitted_at: string | null;
   completion_deadline: string | null;
@@ -159,219 +165,210 @@ const unwrap = <T>(response: { data: ApiResponse<T> }): T => {
 };
 
 export const getApiErrorMessage = (error: unknown, fallback = 'Ошибка запроса') => {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as { detail?: unknown; message?: unknown } | undefined;
-    const detail = data?.detail;
-
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail) && detail.length > 0) {
-      return detail
-        .map((item) => {
-          if (typeof item === 'string') return item;
-          if (item && typeof item === 'object' && 'msg' in item) return String(item.msg);
-          return null;
-        })
-        .filter(Boolean)
-        .join(', ');
-    }
-    if (typeof data?.message === 'string') return data.message;
-    if (error.message) return error.message;
-  }
-
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof Error && error.message && error.message !== 'Ошибка запроса') return error.message;
   return fallback;
 };
 
 export const fileUrl = (path?: string | null) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `${API_URL}${path}`;
+  return `${API_BASE}${path}`;
 };
 
-export const formatPrice = (ad: Pick<AdBlock, 'price' | 'price_type'>) => {
+export const formatPrice = (ad: Pick<ServiceListing, 'price' | 'price_type'>) => {
   if (ad.price_type === 'negotiable') return 'Цена договорная';
   const value = new Intl.NumberFormat('ru-RU').format(ad.price ?? 0);
   if (ad.price_type === 'from') return `от ${value} ₽`;
   return `${value} ₽`;
 };
 
-export const listingTypeLabel = (type: AdBlock['listing_type']) =>
+export const listingTypeLabel = (type: ServiceListing['listing_type']) =>
   type === 'offer' ? 'Оказываю услугу' : 'Ищу услугу';
 
 export const api = {
-  getAdBlock: async (filters: ServiceFilters = {}): Promise<AdBlock[]> => {
-    const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/services`, {
+  getServiceListing: async (filters: ServiceFilters = {}): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/services`, {
       params: filters,
     });
     return unwrap(response);
   },
 
-  getAdBlockById: async (id: number): Promise<AdBlock> => {
-    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/${id}`, { headers: authHeaders() });
+  getServiceListingById: async (id: number): Promise<ServiceListing> => {
+    const response = await http.get<ApiResponse<ServiceListing>>(`/services/${id}`, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  getSimilarServices: async (id: number, limit = 8): Promise<AdBlock[]> => {
-    const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/services/${id}/similar`, {
+  getSimilarServices: async (id: number, limit = 8): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/services/${id}/similar`, {
       params: { limit },
     });
     return unwrap(response);
   },
 
-  getMyAdBlocks: async (): Promise<AdBlock[]> => {
-    const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/services/mine`, {
+  getMyServiceListings: async (skip = 0, limit = 50): Promise<ServiceListing[]> => {
+    const response = await http.get<ApiResponse<ServiceListing[]>>(`/services/mine`, {
+      headers: authHeaders(),
+      params: { skip, limit },
+    });
+    return unwrap(response);
+  },
+
+  getMyServiceListingById: async (id: number): Promise<ServiceListing> => {
+    const response = await http.get<ApiResponse<ServiceListing>>(`/services/manage/${id}`, { headers: authHeaders() });
+    return unwrap(response);
+  },
+
+  addServiceListing: async (formData: FormData) => {
+    const response = await http.post<ApiResponse<ServiceListing>>(`/services`, formData, {
       headers: authHeaders(),
     });
     return unwrap(response);
   },
 
-  getMyAdBlockById: async (id: number): Promise<AdBlock> => {
-    const response = await axios.get<ApiResponse<AdBlock>>(`${API_URL}/services/manage/${id}`, { headers: authHeaders() });
-    return unwrap(response);
-  },
-
-  addAdBlock: async (formData: FormData) => {
-    const response = await axios.post<ApiResponse<AdBlock>>(`${API_URL}/services`, formData, {
+  updateServiceListing: async (id: number, formData: FormData) => {
+    const response = await http.put<ApiResponse<ServiceListing>>(`/services/${id}`, formData, {
       headers: authHeaders(),
     });
     return unwrap(response);
   },
 
-  updateAdBlock: async (id: number, formData: FormData) => {
-    const response = await axios.put<ApiResponse<AdBlock>>(`${API_URL}/services/${id}`, formData, {
-      headers: authHeaders(),
-    });
-    return unwrap(response);
-  },
-
-  deleteAdBlock: async (id: number) => {
-    const response = await axios.delete<ApiResponse<null>>(`${API_URL}/services/${id}`, {
+  deleteServiceListing: async (id: number) => {
+    const response = await http.delete<ApiResponse<null>>(`/services/${id}`, {
       headers: authHeaders(),
     });
     return response.data;
   },
 
-  getCategories: async (): Promise<Category[]> => {
-    const response = await axios.get<ApiResponse<Category[]>>(`${API_URL}/categories`);
+  getCategories: (): Promise<Category[]> => getCachedCategories(async () => {
+    const response = await http.get<ApiResponse<Category[]>>(`/categories`);
     return unwrap(response);
-  },
+  }),
 
-  getMe: async (): Promise<UserProfile> => {
-    const response = await axios.get<ApiResponse<UserProfile>>(`${API_URL}/users/me`, {
+  getMe: (): Promise<UserProfile> => getCachedUser(async () => {
+    const response = await http.get<ApiResponse<UserProfile>>(`/users/me`, {
       headers: authHeaders(),
     });
     return unwrap(response);
-  },
+  }),
 
   updateMe: async (body: UserProfileUpdate): Promise<UserProfile> => {
-    const response = await axios.patch<ApiResponse<UserProfile>>(`${API_URL}/users/me`, body, {
+    const response = await http.patch<ApiResponse<UserProfile>>(`/users/me`, body, {
       headers: authHeaders(),
     });
-    return unwrap(response);
+    const user = unwrap(response);
+    setCachedUser(user);
+    return user;
   },
 
   uploadAvatar: async (avatar: File): Promise<UserProfile> => {
     const formData = new FormData();
     formData.append('avatar', avatar);
-    const response = await axios.post<ApiResponse<UserProfile>>(`${API_URL}/users/me/avatar`, formData, {
+    const response = await http.post<ApiResponse<UserProfile>>(`/users/me/avatar`, formData, {
       headers: authHeaders(),
     });
-    return unwrap(response);
+    const user = unwrap(response);
+    setCachedUser(user);
+    return user;
   },
 
   getUserProfile: async (id: number): Promise<UserProfile> => {
-    const response = await axios.get<ApiResponse<UserProfile>>(`${API_URL}/users/${id}`);
+    const response = await http.get<ApiResponse<UserProfile>>(`/users/${id}`);
     return unwrap(response);
   },
 
-  getUserServices: async (id: number): Promise<AdBlock[]> => {
-    const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/users/${id}/services`);
+  getUserServices: async (id: number, skip = 0, limit = 50): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/users/${id}/services`, { params: { skip, limit } });
     return unwrap(response);
   },
 
-  getUserReviews: async (id: number): Promise<Review[]> => {
-    const response = await axios.get<ApiResponse<Review[]>>(`${API_URL}/users/${id}/reviews`);
+  getUserReviews: async (id: number, skip = 0, limit = 50): Promise<Review[]> => {
+    const response = await http.get<ApiResponse<Review[]>>(`/users/${id}/reviews`, { params: { skip, limit } });
     return unwrap(response);
   },
 
   createReview: async (userId: number, body: ReviewCreate): Promise<Review> => {
-    const response = await axios.post<ApiResponse<Review>>(`${API_URL}/users/${userId}/reviews`, body, {
+    const response = await http.post<ApiResponse<Review>>(`/users/${userId}/reviews`, body, {
       headers: authHeaders(),
     });
     return unwrap(response);
   },
 
   createResponse: async (serviceId: number, message: string): Promise<ServiceResponse> => {
-    const response = await axios.post<ApiResponse<ServiceResponse>>(`${API_URL}/services/${serviceId}/responses`, { message }, { headers: authHeaders() });
+    const response = await http.post<ApiResponse<ServiceResponse>>(`/services/${serviceId}/responses`, { message }, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  getSentResponses: async (): Promise<ServiceResponse[]> => {
-    const response = await axios.get<ApiResponse<ServiceResponse[]>>(`${API_URL}/responses/sent`, { headers: authHeaders() });
+  getMyActiveResponse: async (serviceId: number): Promise<ServiceResponse | null> => {
+    const response = await http.get<ApiResponse<ServiceResponse | null>>(`/services/${serviceId}/my-response`, { headers: authHeaders() });
+    return response.data.data;
+  },
+
+  getSentResponses: async (skip = 0, limit = 50): Promise<ServiceResponse[]> => {
+    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/responses/sent`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
-  getReceivedResponses: async (): Promise<ServiceResponse[]> => {
-    const response = await axios.get<ApiResponse<ServiceResponse[]>>(`${API_URL}/responses/received`, { headers: authHeaders() });
+  getReceivedResponses: async (skip = 0, limit = 50): Promise<ServiceResponse[]> => {
+    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/responses/received`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
   updateResponse: async (id: number, status: ServiceResponse['status'], note?: string): Promise<ServiceResponse> => {
-    const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/responses/${id}`, { status, note: note || null }, { headers: authHeaders() });
+    const response = await http.patch<ApiResponse<ServiceResponse>>(`/responses/${id}`, { status, note: note || null }, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  adminGetDisputedResponses: async (): Promise<ServiceResponse[]> => {
-    const response = await axios.get<ApiResponse<ServiceResponse[]>>(`${API_URL}/admin/responses/disputed`, { headers: authHeaders() });
+  adminGetDisputedResponses: async (skip = 0, limit = 50): Promise<ServiceResponse[]> => {
+    const response = await http.get<ApiResponse<ServiceResponse[]>>(`/admin/responses/disputed`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
   adminResolveResponse: async (id: number, status: 'completed' | 'cancelled' | 'revision_requested', note: string): Promise<ServiceResponse> => {
-    const response = await axios.patch<ApiResponse<ServiceResponse>>(`${API_URL}/admin/responses/${id}`, { status, note }, { headers: authHeaders() });
+    const response = await http.patch<ApiResponse<ServiceResponse>>(`/admin/responses/${id}`, { status, note }, { headers: authHeaders() });
     return unwrap(response);
   },
 
   createReport: async (targetType: 'service' | 'user' | 'review', targetId: number, reason: string, comment?: string): Promise<Report> => {
-    const response = await axios.post<ApiResponse<Report>>(`${API_URL}/reports`, { target_type: targetType, target_id: targetId, reason, comment: comment || null }, { headers: authHeaders() });
+    const response = await http.post<ApiResponse<Report>>(`/reports`, { target_type: targetType, target_id: targetId, reason, comment: comment || null }, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  adminGetUsers: async (): Promise<UserProfile[]> => {
-    const response = await axios.get<ApiResponse<UserProfile[]>>(`${API_URL}/admin/users`, { headers: authHeaders() });
+  adminGetUsers: async (skip = 0, limit = 50): Promise<UserProfile[]> => {
+    const response = await http.get<ApiResponse<UserProfile[]>>(`/admin/users`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
   adminUpdateUser: async (id: number, body: { is_active?: boolean; is_admin?: boolean }): Promise<UserProfile> => {
-    const response = await axios.patch<ApiResponse<UserProfile>>(`${API_URL}/admin/users/${id}`, body, { headers: authHeaders() });
+    const response = await http.patch<ApiResponse<UserProfile>>(`/admin/users/${id}`, body, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  adminGetServices: async (): Promise<AdBlock[]> => {
-    const response = await axios.get<ApiResponse<AdBlock[]>>(`${API_URL}/admin/services`, { headers: authHeaders() });
+  adminGetServices: async (skip = 0, limit = 50): Promise<ServiceSummary[]> => {
+    const response = await http.get<ApiResponse<ServiceSummary[]>>(`/admin/services`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
-  adminUpdateService: async (id: number, status: AdBlock['status']): Promise<AdBlock> => {
-    const response = await axios.patch<ApiResponse<AdBlock>>(`${API_URL}/admin/services/${id}`, { status }, { headers: authHeaders() });
+  adminUpdateService: async (id: number, status: ServiceListing['status']): Promise<ServiceListing> => {
+    const response = await http.patch<ApiResponse<ServiceListing>>(`/admin/services/${id}`, { status }, { headers: authHeaders() });
     return unwrap(response);
   },
 
-  adminGetReports: async (): Promise<Report[]> => {
-    const response = await axios.get<ApiResponse<Report[]>>(`${API_URL}/admin/reports`, { headers: authHeaders() });
+  adminGetReports: async (skip = 0, limit = 50): Promise<Report[]> => {
+    const response = await http.get<ApiResponse<Report[]>>(`/admin/reports`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
-  adminGetReviews: async (): Promise<Review[]> => {
-    const response = await axios.get<ApiResponse<Review[]>>(`${API_URL}/admin/reviews`, { headers: authHeaders() });
+  adminGetReviews: async (skip = 0, limit = 50): Promise<Review[]> => {
+    const response = await http.get<ApiResponse<Review[]>>(`/admin/reviews`, { headers: authHeaders(), params: { skip, limit } });
     return unwrap(response);
   },
 
   adminDeleteReview: async (id: number): Promise<void> => {
-    await axios.delete(`${API_URL}/admin/reviews/${id}`, { headers: authHeaders() });
+    await http.delete(`/admin/reviews/${id}`, { headers: authHeaders() });
   },
 
   adminUpdateReport: async (id: number, status: 'reviewed' | 'resolved' | 'rejected'): Promise<Report> => {
-    const response = await axios.patch<ApiResponse<Report>>(`${API_URL}/admin/reports/${id}`, { status }, { headers: authHeaders() });
+    const response = await http.patch<ApiResponse<Report>>(`/admin/reports/${id}`, { status }, { headers: authHeaders() });
     return unwrap(response);
   },
 };

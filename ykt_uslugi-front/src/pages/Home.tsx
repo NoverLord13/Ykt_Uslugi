@@ -1,16 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     api,
-    fileUrl,
-    formatPrice,
     getApiErrorMessage,
-    listingTypeLabel,
-    type AdBlock,
+    type ServiceSummary,
     type Category,
     type ServiceFilters,
 } from '../api/Api';
 import { getToken } from '../api/auth';
+import { ServiceCard } from '../components/ServiceCard';
 
 type ServiceMode = 'all' | 'offer' | 'request';
 type SortMode = NonNullable<ServiceFilters['sort']>;
@@ -21,9 +19,10 @@ export const Home = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(!!getToken());
     const navigate = useNavigate();
 
-    const [ads, setAds] = useState<AdBlock[]>([]);
+    const [ads, setAds] = useState<ServiceSummary[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [search, setSearch] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
     const [serviceMode, setServiceMode] = useState<ServiceMode>('all');
     const [categoryId, setCategoryId] = useState('');
     const [subcategoryId, setSubcategoryId] = useState('');
@@ -34,6 +33,7 @@ export const Home = () => {
     const [hasMore, setHasMore] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const latestRequest = useRef(0);
 
     const selectedCategory = categories.find((category) => String(category.id) === categoryId);
 
@@ -60,46 +60,51 @@ export const Home = () => {
         setSubcategoryId('');
     }, [categoryId]);
 
-    const buildFilters = (nextSkip: number): ServiceFilters => ({
+    const buildFilters = useCallback((nextSkip: number): ServiceFilters => ({
         skip: nextSkip,
         limit: LIMIT,
-        q: search.trim() || undefined,
+        q: appliedSearch || undefined,
         listing_type: serviceMode === 'all' ? undefined : serviceMode,
         category_id: categoryId ? Number(categoryId) : undefined,
         subcategory_id: subcategoryId ? Number(subcategoryId) : undefined,
         min_price: minPrice || undefined,
         max_price: maxPrice || undefined,
         sort,
-    });
+    }), [appliedSearch, categoryId, maxPrice, minPrice, serviceMode, sort, subcategoryId]);
 
-    const loadAds = async (nextSkip = 0, append = false) => {
+    const loadAds = useCallback(async (nextSkip = 0, append = false) => {
+        const requestId = ++latestRequest.current;
         setIsLoading(true);
         setError('');
         try {
-            const data = await api.getAdBlock(buildFilters(nextSkip));
+            const data = await api.getServiceListing(buildFilters(nextSkip));
+            if (requestId !== latestRequest.current) return;
             setAds((prev) => append ? [...prev, ...data.filter((item) => !prev.some((old) => old.id === item.id))] : data);
             setSkip(nextSkip + data.length);
             setHasMore(data.length === LIMIT);
         } catch (err) {
+            if (requestId !== latestRequest.current) return;
             console.error(err);
             setError(getApiErrorMessage(err, 'Не удалось загрузить объявления'));
         } finally {
-            setIsLoading(false);
+            if (requestId === latestRequest.current) setIsLoading(false);
         }
-    };
+    }, [buildFilters]);
 
     useEffect(() => {
-        loadAds(0, false);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [serviceMode, categoryId, subcategoryId, minPrice, maxPrice, sort]);
+        void loadAds(0, false);
+    }, [loadAds]);
 
     const handleSearchSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        loadAds(0, false);
+        const nextSearch = search.trim();
+        if (nextSearch === appliedSearch) void loadAds(0, false);
+        else setAppliedSearch(nextSearch);
     };
 
     const clearFilters = () => {
         setSearch('');
+        setAppliedSearch('');
         setServiceMode('all');
         setCategoryId('');
         setSubcategoryId('');
@@ -254,40 +259,7 @@ export const Home = () => {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                            {ads.map((ad) => (
-                                <article
-                                    key={ad.id}
-                                    onClick={() => navigate(`/services/${ad.id}`)}
-                                    className="group cursor-pointer overflow-hidden rounded-3xl border border-[var(--line)] bg-white shadow-[0_10px_35px_rgb(23_34_52/0.06)] transition duration-300 hover:-translate-y-1 hover:border-orange-200 hover:shadow-[0_20px_50px_rgb(23_34_52/0.12)]"
-                                >
-                                    <div className="aspect-[4/3] overflow-hidden bg-[#F2F3F5]">
-                                        {(ad.image_url || ad.images[0]?.url) ? (
-                                            <img
-                                                src={fileUrl(ad.images[0]?.url || ad.image_url)}
-                                                alt={ad.title}
-                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                            />
-                                        ) : (
-                                            <div className="flex h-full items-center justify-center text-slate-400">Нет фото</div>
-                                        )}
-                                    </div>
-
-                                    <div className="p-4">
-                                        <div className="flex flex-wrap gap-2">
-                                            <span className="rounded-full bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#2F6FED]">
-                                                {listingTypeLabel(ad.listing_type)}
-                                            </span>
-                                            {ad.category && <span className="rounded-full bg-[#F2F3F5] px-2.5 py-1 text-xs text-slate-600">{ad.category.name}</span>}
-                                        </div>
-                                        <h3 className="mt-3 line-clamp-2 min-h-12 font-bold leading-6 text-[#1A1A1A] transition-colors group-hover:text-[#2F6FED]">{ad.title}</h3>
-                                        <p className="mt-2 text-lg font-black text-[#1A1A1A]">{formatPrice(ad)}</p>
-                                        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-[#8A8F99]">
-                                            <span className="truncate">{ad.owner.display_name || ad.owner.username}</span>
-                                            <span className="truncate pl-3">{ad.location || 'Якутск'}</span>
-                                        </div>
-                                    </div>
-                                </article>
-                            ))}
+                            {ads.map((service) => <ServiceCard key={service.id} service={service} />)}
                         </div>
                     )}
 

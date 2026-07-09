@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, getApiErrorMessage, type ServiceResponse } from '../api/Api';
+import { ACTIVE_DEAL_STATUSES, api, getApiErrorMessage, type ServiceResponse } from '../api/Api';
 import { DealActionModal, ReviewModal } from '../components/FeedbackModals';
 
 const statusMeta: Record<ServiceResponse['status'], { label: string; className: string; hint: string }> = {
@@ -16,18 +16,26 @@ const statusMeta: Record<ServiceResponse['status'], { label: string; className: 
 
 type View = 'active' | 'history';
 type NoteAction = { item: ServiceResponse; type: 'revision_requested' | 'disputed' };
-const activeStatuses: ServiceResponse['status'][] = ['new', 'accepted', 'work_submitted', 'revision_requested', 'disputed'];
+const PAGE_SIZE = 50;
 
 export const Responses = () => {
   const [sent, setSent] = useState<ServiceResponse[]>([]); const [received, setReceived] = useState<ServiceResponse[]>([]);
   const [view, setView] = useState<View>('active'); const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busyId, setBusyId] = useState<number | null>(null);
   const [reviewing, setReviewing] = useState<ServiceResponse | null>(null); const [noteAction, setNoteAction] = useState<NoteAction | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
-  const load = async () => { setLoading(true); setError(''); try { const [sentData, receivedData] = await Promise.all([api.getSentResponses(), api.getReceivedResponses()]); setSent(sentData); setReceived(receivedData); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось загрузить сделки')); } finally { setLoading(false); } };
-  useEffect(() => { void load(); }, []);
+  const load = async (append = false) => { setLoading(true); setError(''); try { const offset = append ? Math.max(sent.length, received.length) : 0; const [sentData, receivedData] = await Promise.all([api.getSentResponses(offset, PAGE_SIZE), api.getReceivedResponses(offset, PAGE_SIZE)]); setSent(items => append ? [...items, ...sentData] : sentData); setReceived(items => append ? [...items, ...receivedData] : receivedData); setHasMore(sentData.length === PAGE_SIZE || receivedData.length === PAGE_SIZE); } catch (err) { setError(getApiErrorMessage(err, 'Не удалось загрузить сделки')); } finally { setLoading(false); } };
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.getSentResponses(0, PAGE_SIZE), api.getReceivedResponses(0, PAGE_SIZE)])
+      .then(([sentData, receivedData]) => { if (!cancelled) { setSent(sentData); setReceived(receivedData); setHasMore(sentData.length === PAGE_SIZE || receivedData.length === PAGE_SIZE); } })
+      .catch((err) => { if (!cancelled) setError(getApiErrorMessage(err, 'Не удалось загрузить сделки')); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
   const all = useMemo(() => [...received.map(item => ({ item, incoming: true })), ...sent.map(item => ({ item, incoming: false }))], [received, sent]);
-  const visible = all.filter(({ item }) => view === 'active' ? activeStatuses.includes(item.status) : !activeStatuses.includes(item.status));
-  const activeCount = all.filter(({ item }) => activeStatuses.includes(item.status)).length;
+  const visible = all.filter(({ item }) => view === 'active' ? ACTIVE_DEAL_STATUSES.includes(item.status) : !ACTIVE_DEAL_STATUSES.includes(item.status));
+  const activeCount = all.filter(({ item }) => ACTIVE_DEAL_STATUSES.includes(item.status)).length;
 
   const changeStatus = async (id: number, status: ServiceResponse['status'], note?: string) => { setBusyId(id); setError(''); try { await api.updateResponse(id, status, note); await load(); } catch (err) { const message = getApiErrorMessage(err, 'Не удалось изменить статус'); setError(message); throw err; } finally { setBusyId(null); } };
 
@@ -56,6 +64,7 @@ export const Responses = () => {
     <div className="mb-6 flex gap-2 overflow-x-auto rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-[var(--line)] sm:w-fit"><button onClick={() => setView('active')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold ${view === 'active' ? 'bg-[var(--ink)] text-white' : 'text-[var(--muted)]'}`}>В работе <span className="ml-1 opacity-70">{activeCount}</span></button><button onClick={() => setView('history')} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold ${view === 'history' ? 'bg-[var(--ink)] text-white' : 'text-[var(--muted)]'}`}>История <span className="ml-1 opacity-70">{all.length - activeCount}</span></button></div>
     {error && <p className="form-error mb-5">{error}</p>}
     {loading ? <div className="empty-state">Загружаем ваши сделки…</div> : visible.length ? <div className="grid gap-4 lg:grid-cols-2">{visible.map(card)}</div> : <div className="empty-state"><div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--brand-soft)] text-2xl">↗</div><h2 className="text-lg font-black text-[var(--ink)]">{view === 'active' ? 'Активных сделок пока нет' : 'История пока пуста'}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6">{view === 'active' ? 'Откликнитесь на подходящее объявление или дождитесь отклика на своё.' : 'Здесь появятся завершённые, отменённые и отклонённые сделки.'}</p></div>}
+    {!loading && hasMore && <div className="mt-6 text-center"><button onClick={() => void load(true)} className="button-secondary">Показать ещё</button></div>}
     {reviewing?.review_target && <ReviewModal
       open
       responseId={reviewing.id}

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.domain_types import AdminDealStatus, DealStatus, DealUpdateStatus, ListingType, ReportReason, ReportStatus, ReportTargetType, ReviewType
 from schemas.common import UserBrief
 
 
@@ -10,12 +11,12 @@ class ResponseCreate(BaseModel):
 
 
 class ResponseUpdate(BaseModel):
-    status: str = Field(..., pattern=r"^(accepted|work_submitted|completed|revision_requested|disputed|cancelled|declined)$")
+    status: DealUpdateStatus
     note: str | None = Field(None, max_length=1000)
 
 
 class AdminResponseResolution(BaseModel):
-    status: str = Field(..., pattern=r"^(completed|cancelled|revision_requested)$")
+    status: AdminDealStatus
     note: str = Field(..., min_length=3, max_length=1000)
 
 
@@ -24,7 +25,7 @@ class ResponseServiceRead(BaseModel):
 
     id: int
     title: str
-    listing_type: str
+    listing_type: ListingType
     owner: UserBrief
 
 
@@ -35,7 +36,7 @@ class ResponseRead(BaseModel):
     service: ResponseServiceRead
     respondent: UserBrief
     message: str | None
-    status: str
+    status: DealStatus
     status_note: str | None = None
     work_submitted_at: datetime | None = None
     completion_deadline: datetime | None = None
@@ -51,18 +52,18 @@ class ResponseRead(BaseModel):
     can_review: bool = False
     review_left: bool = False
     review_target: UserBrief | None = None
-    review_type: str | None = None
+    review_type: ReviewType | None = None
 
 
 class ReportCreate(BaseModel):
-    target_type: str = Field(..., pattern=r"^(service|user|review)$")
+    target_type: ReportTargetType
     target_id: int = Field(..., ge=1)
-    reason: str = Field(..., pattern=r"^(spam|fraud|abuse|illegal|wrong_info|other)$")
+    reason: ReportReason
     comment: str | None = Field(None, max_length=1500)
 
 
 class ReportUpdate(BaseModel):
-    status: str = Field(..., pattern=r"^(reviewed|resolved|rejected)$")
+    status: ReportStatus
 
 
 class ReportRead(BaseModel):
@@ -70,10 +71,10 @@ class ReportRead(BaseModel):
 
     id: int
     reporter: UserBrief
-    target_type: str
+    target_type: ReportTargetType
     target_id: int
-    reason: str
+    reason: ReportReason
     comment: str | None = None
-    status: str
+    status: ReportStatus
     created_at: datetime
     updated_at: datetime
