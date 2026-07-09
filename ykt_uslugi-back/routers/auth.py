@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.phone import phone_to_str, try_parse_phone
 from core.security import (
@@ -26,12 +27,12 @@ async def register_send_code(body: PhoneRequest):
     try:
         await send_code(phone)
     except SmsRateLimitError as exc:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
     return ApiResponse(message="Код отправлен")
 
 
 @router.post("/register/verify-code", response_model=ApiResponse[VerificationTokenData])
-def register_verify_code(body: VerifyCodeRequest):
+async def register_verify_code(body: VerifyCodeRequest):
     phone = phone_to_str(body.phone)
     if not verify_code(phone, body.code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный или просроченный код")
@@ -43,7 +44,7 @@ def register_verify_code(body: VerifyCodeRequest):
 
 
 @router.post("/register/complete", response_model=ApiResponse[TokenData])
-def register_complete(body: RegisterCompleteRequest, db: Session = Depends(get_db)):
+async def register_complete(body: RegisterCompleteRequest, db: AsyncSession = Depends(get_db)):
     if not body.accept_terms:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Необходимо принять условия использования")
     phone = decode_verification_token(body.verification_token)
@@ -53,10 +54,10 @@ def register_complete(body: RegisterCompleteRequest, db: Session = Depends(get_d
     if not is_phone_verified(phone):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Номер телефона не подтверждён")
 
-    if db.query(User).filter(User.phone_number == phone).first():
+    if await db.scalar(select(User.id).where(User.phone_number == phone)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Пользователь с таким номером уже существует")
 
-    if db.query(User).filter(User.username == body.username).first():
+    if await db.scalar(select(User.id).where(User.username == body.username)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Имя пользователя уже занято")
 
     user = User(
@@ -66,8 +67,8 @@ def register_complete(body: RegisterCompleteRequest, db: Session = Depends(get_d
         legal_accepted_at=datetime.now(timezone.utc),
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     consume_verified_phone(phone)
 
     return ApiResponse(
@@ -80,13 +81,13 @@ def register_complete(body: RegisterCompleteRequest, db: Session = Depends(get_d
 
 
 @router.post("/login", response_model=ApiResponse[TokenData])
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = None
     phone = try_parse_phone(body.login)
     if phone:
-        user = db.query(User).filter(User.phone_number == phone).first()
+        user = await db.scalar(select(User).where(User.phone_number == phone))
     if not user:
-        user = db.query(User).filter(User.username == body.login).first()
+        user = await db.scalar(select(User).where(User.username == body.login))
 
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
@@ -105,27 +106,29 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         ),
     )
 
+
 @router.post("/login/phone/send-code", response_model=ApiResponse[None])
-async def login_phone(body: PhoneRequest, db: Session = Depends(get_db)):
+async def login_phone(body: PhoneRequest, db: AsyncSession = Depends(get_db)):
     phone = phone_to_str(body.phone)
-    user = db.query(User).filter(User.phone_number == phone).first()
+    user = await db.scalar(select(User).where(User.phone_number == phone))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь с таким номером не найден")
 
     try:
         await send_code(phone)
     except SmsRateLimitError as exc:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
 
     return ApiResponse(message="Код отправлен")
 
+
 @router.post("/login/phone/verify-code", response_model=ApiResponse[TokenData])
-def login_phone_verify(body: VerifyCodeRequest, db: Session = Depends(get_db)):
+async def login_phone_verify(body: VerifyCodeRequest, db: AsyncSession = Depends(get_db)):
     phone = phone_to_str(body.phone)
     if not verify_code(phone, body.code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный или просроченный код")
 
-    user = db.query(User).filter(User.phone_number == phone).first()
+    user = await db.scalar(select(User).where(User.phone_number == phone))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь с таким номером не найден")
 

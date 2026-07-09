@@ -18,7 +18,7 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Схема создаётся Alembic-миграциями до запуска приложения.
-    seed_categories()
+    await seed_categories()
     yield
 
 
@@ -43,5 +43,5 @@ app.include_router(admin.router)
 
 
 @app.get("/")
-def read_root():
+async def read_root():
     return {"Hello": "World"}

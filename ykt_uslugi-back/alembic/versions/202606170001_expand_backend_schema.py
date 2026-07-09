@@ -17,16 +17,22 @@ depends_on: str | Sequence[str] | None = None
 
 
 def _table_exists(table_name: str) -> bool:
+    if op.get_context().as_sql:
+        return False
     inspector = sa.inspect(op.get_bind())
     return table_name in inspector.get_table_names()
 
 
 def _column_exists(table_name: str, column_name: str) -> bool:
+    if op.get_context().as_sql:
+        return False
     inspector = sa.inspect(op.get_bind())
     return any(column["name"] == column_name for column in inspector.get_columns(table_name))
 
 
 def _index_exists(table_name: str, index_name: str) -> bool:
+    if op.get_context().as_sql:
+        return False
     inspector = sa.inspect(op.get_bind())
     return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
 

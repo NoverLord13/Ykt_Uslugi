@@ -1,6 +1,22 @@
 name: ykt-uslugi
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ykt_uslugi}
+      POSTGRES_USER: ${POSTGRES_USER:-ykt_uslugi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ykt_uslugi}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./ykt_uslugi-back
@@ -8,7 +24,7 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       SECRET_KEY: ${SECRET_KEY:-docker-local-secret-change-before-production}
-      DATABASE_URL: sqlite:////data/app.db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ykt_uslugi}:${POSTGRES_PASSWORD:-ykt_uslugi}@db:5432/${POSTGRES_DB:-ykt_uslugi}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       SMS_CODE_TTL_SECONDS: ${SMS_CODE_TTL_SECONDS:-300}
       SMS_RESEND_COOLDOWN_SECONDS: ${SMS_RESEND_COOLDOWN_SECONDS:-60}
@@ -16,7 +32,10 @@ services:
       UPLOAD_DIR: /data/uploads
       CORS_ORIGINS: http://localhost:${FRONTEND_PORT:-5173}
     volumes:
-      - backend_data:/data
+      - backend_uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -43,4 +62,5 @@ services:
     init: true
 
 volumes:
-  backend_data:
+  postgres_data:
+  backend_uploads:
