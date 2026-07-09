@@ -1,24 +1,24 @@
 import unittest
 from decimal import Decimal
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from database import Base
 from models import Category, Service, Subcategory, User
 from services.listings import ListingValidationError, apply_service_update, normalize_price, validate_category_pair
 
 
-class ListingServiceTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(self.engine)
-        self.db = Session(self.engine)
+class ListingServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        self.db = AsyncSession(self.engine, expire_on_commit=False)
         self.owner = User(username="owner", phone_number="+79990000001", hashed_password="x")
         self.category = Category(name="Category", slug="category")
         self.other_category = Category(name="Other", slug="other")
         self.db.add_all([self.owner, self.category, self.other_category])
-        self.db.flush()
+        await self.db.flush()
         self.subcategory = Subcategory(category_id=self.category.id, name="Subcategory", slug="subcategory")
         self.service = Service(
             owner_id=self.owner.id,
@@ -29,11 +29,11 @@ class ListingServiceTests(unittest.TestCase):
             price=Decimal("100"),
         )
         self.db.add_all([self.subcategory, self.service])
-        self.db.flush()
+        await self.db.flush()
 
-    def tearDown(self) -> None:
-        self.db.close()
-        self.engine.dispose()
+    async def asyncTearDown(self) -> None:
+        await self.db.close()
+        await self.engine.dispose()
 
     def test_negotiable_price_is_cleared(self) -> None:
         self.assertIsNone(normalize_price("negotiable", Decimal("100")))
@@ -42,13 +42,13 @@ class ListingServiceTests(unittest.TestCase):
         with self.assertRaises(ListingValidationError):
             normalize_price("fixed", Decimal("0"))
 
-    def test_subcategory_must_belong_to_category(self) -> None:
+    async def test_subcategory_must_belong_to_category(self) -> None:
         with self.assertRaises(ListingValidationError):
-            validate_category_pair(self.db, self.other_category.id, self.subcategory.id)
+            await validate_category_pair(self.db, self.other_category.id, self.subcategory.id)
 
-    def test_moderation_status_cannot_be_selected_by_owner(self) -> None:
+    async def test_moderation_status_cannot_be_selected_by_owner(self) -> None:
         with self.assertRaises(ListingValidationError) as context:
-            apply_service_update(
+            await apply_service_update(
                 self.db,
                 self.service,
                 owner_phone=self.owner.phone_number,

@@ -1,35 +1,42 @@
 import asyncio
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload, load_only, selectinload
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, load_only, selectinload
 
 from database import get_db
 from dependencies import get_current_user
-from models.review import Review
 from models.response import ServiceResponse
-from models.service import Service
+from models.review import Review
+from models.service import Category, Service
 from models.user import User
 from schemas.common import ApiResponse, CurrentUserProfileRead, ReviewRead, ServiceSummaryRead, UserProfileRead
 from schemas.user import ReviewCreate, UserProfileUpdate
 from services.files import delete_upload, save_upload
 from services.reports import delete_target_reports
-from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-def _profile_response(user: User, db: Session, *, private: bool = False) -> UserProfileRead | CurrentUserProfileRead:
+async def _profile_response(user: User, db: AsyncSession, *, private: bool = False) -> UserProfileRead | CurrentUserProfileRead:
     performer_avg, performer_count = (
-        db.query(func.avg(Review.rating), func.count(Review.id))
-        .filter(Review.target_user_id == user.id, Review.review_type == "performer")
-        .one()
-    )
+        await db.execute(
+            select(func.avg(Review.rating), func.count(Review.id)).where(
+                Review.target_user_id == user.id,
+                Review.review_type == "performer",
+            )
+        )
+    ).one()
     customer_avg, customer_count = (
-        db.query(func.avg(Review.rating), func.count(Review.id))
-        .filter(Review.target_user_id == user.id, Review.review_type == "customer")
-        .one()
-    )
+        await db.execute(
+            select(func.avg(Review.rating), func.count(Review.id)).where(
+                Review.target_user_id == user.id,
+                Review.review_type == "customer",
+            )
+        )
+    ).one()
     schema = CurrentUserProfileRead if private else UserProfileRead
     data = schema.model_validate(user)
     data.performer_rating_avg = float(performer_avg) if performer_avg is not None else None
@@ -42,122 +49,100 @@ def _profile_response(user: User, db: Session, *, private: bool = False) -> User
 
 
 @router.get("/me", response_model=ApiResponse[CurrentUserProfileRead])
-def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return ApiResponse(message="Профиль пользователя", data=_profile_response(current_user, db, private=True))
+async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return ApiResponse(message="Профиль пользователя", data=await _profile_response(current_user, db, private=True))
 
 
 @router.patch("/me", response_model=ApiResponse[CurrentUserProfileRead])
-def update_me(
-    body: UserProfileUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+async def update_me(body: UserProfileUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(current_user, field, value)
-
-    db.commit()
-    db.refresh(current_user)
-    return ApiResponse(message="Профиль обновлен", data=_profile_response(current_user, db, private=True))
+    await db.commit()
+    await db.refresh(current_user)
+    return ApiResponse(message="Профиль обновлен", data=await _profile_response(current_user, db, private=True))
 
 
 @router.post("/me/avatar", response_model=ApiResponse[CurrentUserProfileRead])
-async def upload_avatar(
-    avatar: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+async def upload_avatar(avatar: UploadFile = File(...), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     old_avatar_url = current_user.avatar_url
     new_avatar_url = await save_upload(avatar)
     current_user.avatar_url = new_avatar_url
     try:
-        db.commit()
+        await db.commit()
     except Exception:
-        db.rollback()
+        await db.rollback()
         await asyncio.to_thread(delete_upload, new_avatar_url)
         raise
-    db.refresh(current_user)
+    await db.refresh(current_user)
     await asyncio.to_thread(delete_upload, old_avatar_url)
-    return ApiResponse(message="Аватар обновлен", data=_profile_response(current_user, db, private=True))
+    return ApiResponse(message="Аватар обновлен", data=await _profile_response(current_user, db, private=True))
 
 
 @router.get("/{user_id}", response_model=ApiResponse[UserProfileRead])
-def get_user_profile(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+async def get_user_profile(user_id: int, db: AsyncSession = Depends(get_db)):
+    user = await db.scalar(select(User).where(User.id == user_id, User.is_active.is_(True)))
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
-    return ApiResponse(message="Профиль пользователя", data=_profile_response(user, db))
+    return ApiResponse(message="Профиль пользователя", data=await _profile_response(user, db))
 
 
 @router.get("/{user_id}/services", response_model=ApiResponse[list[ServiceSummaryRead]])
-def get_user_services(
-    user_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    if not db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first():
+async def get_user_services(user_id: int, skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), db: AsyncSession = Depends(get_db)):
+    if not await db.scalar(select(User.id).where(User.id == user_id, User.is_active.is_(True))):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
-
-    services = (
-        db.query(Service)
+    result = await db.execute(
+        select(Service)
         .options(
-            load_only(Service.id, Service.owner_id, Service.title, Service.price, Service.listing_type, Service.category_id, Service.subcategory_id, Service.location, Service.price_type, Service.status, Service.image_url, Service.is_active, Service.created_at, Service.updated_at),
-            joinedload(Service.owner), joinedload(Service.category), joinedload(Service.subcategory), selectinload(Service.images),
+            load_only(
+                Service.id, Service.owner_id, Service.title, Service.price, Service.listing_type,
+                Service.category_id, Service.subcategory_id, Service.location, Service.price_type,
+                Service.status, Service.image_url, Service.is_active, Service.created_at, Service.updated_at,
+            ),
+            joinedload(Service.owner),
+            joinedload(Service.category),
+            joinedload(Service.subcategory),
+            selectinload(Service.images),
         )
-        .filter(Service.owner_id == user_id, Service.is_active.is_(True), Service.status == "active")
+        .where(Service.owner_id == user_id, Service.is_active.is_(True), Service.status == "active")
         .order_by(Service.created_at.desc())
         .offset(skip)
         .limit(limit)
-        .all()
     )
+    services = result.unique().scalars().all()
     return ApiResponse(message="Объявления пользователя", data=[ServiceSummaryRead.model_validate(s) for s in services])
 
 
 @router.get("/{user_id}/reviews", response_model=ApiResponse[list[ReviewRead]])
-def get_user_reviews(
-    user_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    if not db.query(User).filter(User.id == user_id).first():
+async def get_user_reviews(user_id: int, skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), db: AsyncSession = Depends(get_db)):
+    if not await db.scalar(select(User.id).where(User.id == user_id)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
-
-    reviews = (
-        db.query(Review)
+    result = await db.execute(
+        select(Review)
         .options(joinedload(Review.author), joinedload(Review.target_user))
-        .filter(Review.target_user_id == user_id)
+        .where(Review.target_user_id == user_id)
         .order_by(Review.created_at.desc())
         .offset(skip)
         .limit(limit)
-        .all()
     )
+    reviews = result.unique().scalars().all()
     return ApiResponse(message="Отзывы пользователя", data=[ReviewRead.model_validate(r) for r in reviews])
 
 
 @router.post("/{user_id}/reviews", response_model=ApiResponse[ReviewRead], status_code=status.HTTP_201_CREATED)
-def create_user_review(
-    user_id: int,
-    body: ReviewCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    target_user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+async def create_user_review(user_id: int, body: ReviewCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    target_user = await db.scalar(select(User).where(User.id == user_id, User.is_active.is_(True)))
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
     if target_user.id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя оставить отзыв самому себе")
-
-    response = (
-        db.query(ServiceResponse)
+    response = await db.scalar(
+        select(ServiceResponse)
         .options(joinedload(ServiceResponse.service))
-        .filter(ServiceResponse.id == body.response_id, ServiceResponse.status == "completed")
-        .first()
+        .where(ServiceResponse.id == body.response_id, ServiceResponse.status == "completed")
     )
     if not response:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Отзыв доступен только после завершённой сделки")
-
     if response.service.listing_type == "request":
         customer_id, performer_id = response.service.owner_id, response.respondent_id
     else:
@@ -167,19 +152,10 @@ def create_user_review(
     elif current_user.id == performer_id and target_user.id == customer_id:
         review_type = "customer"
     else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Оценить друг друга могут только участники завершённой сделки",
-        )
-
-    existing = (
-        db.query(Review)
-        .filter(Review.author_id == current_user.id, Review.response_id == response.id)
-        .first()
-    )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Оценить друг друга могут только участники завершённой сделки")
+    existing = await db.scalar(select(Review.id).where(Review.author_id == current_user.id, Review.response_id == response.id))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Вы уже оставили отзыв по этой сделке")
-
     review = Review(
         author_id=current_user.id,
         target_user_id=target_user.id,
@@ -191,27 +167,22 @@ def create_user_review(
     )
     db.add(review)
     try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="Вы уже оставили отзыв по этой сделке")
-    db.refresh(review)
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Вы уже оставили отзыв по этой сделке") from exc
+    review = await db.scalar(select(Review).options(joinedload(Review.author), joinedload(Review.target_user)).where(Review.id == review.id))
     return ApiResponse(message="Отзыв создан", data=ReviewRead.model_validate(review))
 
 
 @router.delete("/reviews/{review_id}", response_model=ApiResponse[None])
-def delete_review(
-    review_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    review = db.query(Review).filter(Review.id == review_id).first()
+async def delete_review(review_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    review = await db.scalar(select(Review).where(Review.id == review_id).with_for_update())
     if not review:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Отзыв не найден")
     if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Опубликованный отзыв нельзя удалить — это сохраняет историю сделки")
-
-    delete_target_reports(db, "review", review.id)
-    db.delete(review)
-    db.commit()
+    await delete_target_reports(db, "review", review.id)
+    await db.delete(review)
+    await db.commit()
     return ApiResponse(message="Отзыв удален")

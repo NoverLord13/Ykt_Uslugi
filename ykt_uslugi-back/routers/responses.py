@@ -1,7 +1,9 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from database import get_db
 from dependencies import get_current_user, require_admin
@@ -32,14 +34,11 @@ def _deal_roles(item: ServiceResponse) -> tuple[int, int]:
     return deal_roles(item)
 
 
-def _reviewed_response_ids(db: Session, user_id: int, response_ids: list[int]) -> set[int]:
+async def _reviewed_response_ids(db: AsyncSession, user_id: int, response_ids: list[int]) -> set[int]:
     if not response_ids:
         return set()
-    rows = db.query(Review.response_id).filter(
-        Review.author_id == user_id,
-        Review.response_id.in_(response_ids),
-    ).all()
-    return {response_id for (response_id,) in rows if response_id is not None}
+    result = await db.execute(select(Review.response_id).where(Review.author_id == user_id, Review.response_id.in_(response_ids)))
+    return {response_id for (response_id,) in result.all() if response_id is not None}
 
 
 def _to_response_read(item: ServiceResponse, current_user: User, review_left: bool = False) -> ResponseRead:
@@ -48,7 +47,6 @@ def _to_response_read(item: ServiceResponse, current_user: User, review_left: bo
     is_customer = current_user.id == customer_id
     is_performer = current_user.id == performer_id
     is_participant = is_customer or is_performer
-
     data.can_accept = item.service.owner_id == current_user.id and item.status == "new"
     data.can_submit_work = is_performer and item.status in {"accepted", "revision_requested"}
     data.can_confirm = is_customer and item.status == "work_submitted"
@@ -56,9 +54,7 @@ def _to_response_read(item: ServiceResponse, current_user: User, review_left: bo
     data.can_dispute = is_participant and item.status in {"accepted", "work_submitted", "revision_requested"}
     data.can_cancel = is_participant and item.status in {"new", "accepted"}
     if item.work_submitted_at:
-        submitted_utc = utc_from_storage(item.work_submitted_at)
-        data.completion_deadline = submitted_utc + timedelta(hours=AUTO_COMPLETE_HOURS)
-
+        data.completion_deadline = utc_from_storage(item.work_submitted_at) + timedelta(hours=AUTO_COMPLETE_HOURS)
     data.review_left = review_left
     data.can_review = is_participant and item.status == "completed" and not data.review_left
     if data.can_review:
@@ -68,116 +64,88 @@ def _to_response_read(item: ServiceResponse, current_user: User, review_left: bo
     return data
 
 
+async def _get_response(db: AsyncSession, *criteria, for_update: bool = False) -> ServiceResponse | None:
+    stmt = select(ServiceResponse).options(*_response_options()).where(*criteria)
+    if for_update:
+        stmt = stmt.with_for_update()
+    result = await db.execute(stmt)
+    return result.unique().scalar_one_or_none()
+
+
 @router.post("/services/{service_id}/responses", response_model=ApiResponse[ResponseRead], status_code=201)
-def create_response(
-    service_id: int,
-    body: ResponseCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    service = db.query(Service).filter(
-        Service.id == service_id, Service.is_active.is_(True), Service.status == "active"
-    ).with_for_update().first()
+async def create_response(service_id: int, body: ResponseCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    service = await db.scalar(select(Service).where(Service.id == service_id, Service.is_active.is_(True), Service.status == "active").with_for_update())
     if not service:
         raise HTTPException(status_code=404, detail="Объявление не найдено")
     if service.owner_id == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя откликнуться на своё объявление")
-    if db.query(ServiceResponse).filter(
-        ServiceResponse.service_id == service_id,
-        ServiceResponse.respondent_id == current_user.id,
-        ServiceResponse.status.in_(ACTIVE_STATUSES),
-    ).first():
+    if await db.scalar(select(ServiceResponse.id).where(ServiceResponse.service_id == service_id, ServiceResponse.respondent_id == current_user.id, ServiceResponse.status.in_(ACTIVE_STATUSES))):
         raise HTTPException(status_code=409, detail="У вас уже есть активная сделка по этому объявлению")
-
     message = body.message.strip() if body.message else None
     response = ServiceResponse(service_id=service_id, respondent_id=current_user.id, message=message or None)
     db.add(response)
-    db.commit()
-    response = db.query(ServiceResponse).options(*_response_options()).filter(ServiceResponse.id == response.id).one()
+    await db.commit()
+    response = await _get_response(db, ServiceResponse.id == response.id)
     return ApiResponse(message="Отклик отправлен", data=_to_response_read(response, current_user))
 
 
 @router.get("/services/{service_id}/my-response", response_model=ApiResponse[ResponseRead | None])
-def get_my_active_response(
-    service_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    item = db.query(ServiceResponse).options(*_response_options()).filter(
-        ServiceResponse.service_id == service_id,
-        ServiceResponse.respondent_id == current_user.id,
-        ServiceResponse.status.in_(ACTIVE_STATUSES),
-    ).order_by(ServiceResponse.updated_at.desc()).first()
+async def get_my_active_response(service_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ServiceResponse)
+        .options(*_response_options())
+        .where(ServiceResponse.service_id == service_id, ServiceResponse.respondent_id == current_user.id, ServiceResponse.status.in_(ACTIVE_STATUSES))
+        .order_by(ServiceResponse.updated_at.desc())
+    )
+    item = result.unique().scalars().first()
     if not item:
         return ApiResponse(message="Активный отклик отсутствует", data=None)
-    reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id])
+    reviewed_ids = await _reviewed_response_ids(db, current_user.id, [item.id])
     return ApiResponse(message="Активный отклик", data=_to_response_read(item, current_user, item.id in reviewed_ids))
 
 
 @router.get("/responses/sent", response_model=ApiResponse[list[ResponseRead]])
-def sent_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    items = db.query(ServiceResponse).options(*_response_options()).filter(
-        ServiceResponse.respondent_id == current_user.id
-    ).order_by(ServiceResponse.created_at.desc()).offset(skip).limit(limit).all()
-    reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id for item in items])
-    return ApiResponse(message="Исходящие отклики", data=[
-        _to_response_read(item, current_user, item.id in reviewed_ids) for item in items
-    ])
+async def sent_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ServiceResponse).options(*_response_options()).where(ServiceResponse.respondent_id == current_user.id).order_by(ServiceResponse.created_at.desc()).offset(skip).limit(limit))
+    items = result.unique().scalars().all()
+    reviewed_ids = await _reviewed_response_ids(db, current_user.id, [item.id for item in items])
+    return ApiResponse(message="Исходящие отклики", data=[_to_response_read(item, current_user, item.id in reviewed_ids) for item in items])
 
 
 @router.get("/responses/received", response_model=ApiResponse[list[ResponseRead]])
-def received_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    items = db.query(ServiceResponse).join(Service).options(*_response_options()).filter(
-        Service.owner_id == current_user.id
-    ).order_by(ServiceResponse.created_at.desc()).offset(skip).limit(limit).all()
-    reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id for item in items])
-    return ApiResponse(message="Входящие отклики", data=[
-        _to_response_read(item, current_user, item.id in reviewed_ids) for item in items
-    ])
+async def received_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ServiceResponse).join(Service).options(*_response_options()).where(Service.owner_id == current_user.id).order_by(ServiceResponse.created_at.desc()).offset(skip).limit(limit))
+    items = result.unique().scalars().all()
+    reviewed_ids = await _reviewed_response_ids(db, current_user.id, [item.id for item in items])
+    return ApiResponse(message="Входящие отклики", data=[_to_response_read(item, current_user, item.id in reviewed_ids) for item in items])
 
 
 @router.patch("/responses/{response_id}", response_model=ApiResponse[ResponseRead])
-def update_response(
-    response_id: int,
-    body: ResponseUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    item = db.query(ServiceResponse).options(*_response_options()).filter(
-        ServiceResponse.id == response_id
-    ).with_for_update().first()
+async def update_response(response_id: int, body: ResponseUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    item = await _get_response(db, ServiceResponse.id == response_id, for_update=True)
     if not item:
         raise HTTPException(status_code=404, detail="Отклик не найден")
-
     note = body.note.strip() if body.note else None
     try:
-        apply_transition(db, item, user_id=current_user.id, next_status=body.status, note=note)
+        await apply_transition(db, item, user_id=current_user.id, next_status=body.status, note=note)
     except DealTransitionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    db.commit()
-    item = db.query(ServiceResponse).options(*_response_options()).filter(ServiceResponse.id == item.id).one()
-    reviewed_ids = _reviewed_response_ids(db, current_user.id, [item.id])
+    await db.commit()
+    item = await _get_response(db, ServiceResponse.id == item.id)
+    reviewed_ids = await _reviewed_response_ids(db, current_user.id, [item.id])
     return ApiResponse(message="Статус сделки обновлён", data=_to_response_read(item, current_user, item.id in reviewed_ids))
 
 
 @router.get("/admin/responses/disputed", response_model=ApiResponse[list[ResponseRead]], tags=["admin"])
-def disputed_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    items = db.query(ServiceResponse).options(*_response_options()).filter(
-        ServiceResponse.status == "disputed"
-    ).order_by(ServiceResponse.updated_at.desc()).offset(skip).limit(limit).all()
+async def disputed_responses(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ServiceResponse).options(*_response_options()).where(ServiceResponse.status == "disputed").order_by(ServiceResponse.updated_at.desc()).offset(skip).limit(limit))
+    items = result.unique().scalars().all()
     return ApiResponse(message="Спорные сделки", data=[_to_response_read(item, admin) for item in items])
 
 
 @router.patch("/admin/responses/{response_id}", response_model=ApiResponse[ResponseRead], tags=["admin"])
-def resolve_disputed_response(
-    response_id: int,
-    body: AdminResponseResolution,
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    item = db.query(ServiceResponse).options(*_response_options()).filter(
-        ServiceResponse.id == response_id
-    ).with_for_update().first()
+async def resolve_disputed_response(response_id: int, body: AdminResponseResolution, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    item = await _get_response(db, ServiceResponse.id == response_id, for_update=True)
     if not item:
         raise HTTPException(status_code=404, detail="Сделка не найдена")
     if item.status != "disputed":
@@ -188,69 +156,52 @@ def resolve_disputed_response(
         item.completed_at = utc_now_naive()
     if body.status == "revision_requested":
         item.work_submitted_at = None
-    db.commit()
-    item = db.query(ServiceResponse).options(*_response_options()).filter(ServiceResponse.id == item.id).one()
+    await db.commit()
+    item = await _get_response(db, ServiceResponse.id == item.id)
     return ApiResponse(message="Спор разрешён", data=_to_response_read(item, admin))
 
 
-def _target_exists(db: Session, target_type: str, target_id: int) -> bool:
+async def _target_exists(db: AsyncSession, target_type: str, target_id: int) -> bool:
     models = {"service": Service, "user": User, "review": Review}
-    return db.query(models[target_type]).filter(models[target_type].id == target_id).first() is not None
+    return await db.scalar(select(models[target_type].id).where(models[target_type].id == target_id)) is not None
 
 
 @router.post("/reports", response_model=ApiResponse[ReportRead], status_code=201)
-def create_report(
-    body: ReportCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    if not _target_exists(db, body.target_type, body.target_id):
+async def create_report(body: ReportCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not await _target_exists(db, body.target_type, body.target_id):
         raise HTTPException(status_code=404, detail="Объект жалобы не найден")
     if body.target_type == "user" and body.target_id == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя пожаловаться на собственный профиль")
-    if body.target_type == "service" and db.query(Service.id).filter(
-        Service.id == body.target_id, Service.owner_id == current_user.id
-    ).first():
+    if body.target_type == "service" and await db.scalar(select(Service.id).where(Service.id == body.target_id, Service.owner_id == current_user.id)):
         raise HTTPException(status_code=400, detail="Нельзя пожаловаться на собственное объявление")
-    if body.target_type == "review" and db.query(Review.id).filter(
-        Review.id == body.target_id, Review.author_id == current_user.id
-    ).first():
+    if body.target_type == "review" and await db.scalar(select(Review.id).where(Review.id == body.target_id, Review.author_id == current_user.id)):
         raise HTTPException(status_code=400, detail="Нельзя пожаловаться на собственный отзыв")
     comment = body.comment.strip() if body.comment else None
     if body.reason == "other" and (not comment or len(comment) < 10):
         raise HTTPException(status_code=400, detail="Для другой причины добавьте комментарий минимум из 10 символов")
-    duplicate = db.query(Report.id).filter(
-        Report.reporter_id == current_user.id,
-        Report.target_type == body.target_type,
-        Report.target_id == body.target_id,
-        Report.status.in_(("new", "reviewed")),
-    ).first()
+    duplicate = await db.scalar(select(Report.id).where(Report.reporter_id == current_user.id, Report.target_type == body.target_type, Report.target_id == body.target_id, Report.status.in_(("new", "reviewed"))))
     if duplicate:
         raise HTTPException(status_code=409, detail="Ваша жалоба уже принята и находится на рассмотрении")
     report = Report(reporter_id=current_user.id, target_type=body.target_type, target_id=body.target_id, reason=body.reason, comment=comment)
     db.add(report)
-    db.commit()
-    db.refresh(report)
+    await db.commit()
+    report = await db.scalar(select(Report).options(joinedload(Report.reporter)).where(Report.id == report.id))
     return ApiResponse(message="Жалоба отправлена", data=ReportRead.model_validate(report))
 
 
 @router.get("/admin/reports", response_model=ApiResponse[list[ReportRead]], tags=["admin"])
-def list_reports(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), _: User = Depends(require_admin), db: Session = Depends(get_db)):
-    reports = db.query(Report).options(joinedload(Report.reporter)).order_by(Report.created_at.desc()).offset(skip).limit(limit).all()
+async def list_reports(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), _: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Report).options(joinedload(Report.reporter)).order_by(Report.created_at.desc()).offset(skip).limit(limit))
+    reports = result.unique().scalars().all()
     return ApiResponse(message="Список жалоб", data=[ReportRead.model_validate(item) for item in reports])
 
 
 @router.patch("/admin/reports/{report_id}", response_model=ApiResponse[ReportRead], tags=["admin"])
-def update_report(
-    report_id: int,
-    body: ReportUpdate,
-    _: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    report = db.query(Report).options(joinedload(Report.reporter)).filter(Report.id == report_id).first()
+async def update_report(report_id: int, body: ReportUpdate, _: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    report = await db.scalar(select(Report).options(joinedload(Report.reporter)).where(Report.id == report_id).with_for_update())
     if not report:
         raise HTTPException(status_code=404, detail="Жалоба не найдена")
     report.status = body.status
-    db.commit()
-    db.refresh(report)
+    await db.commit()
+    report = await db.scalar(select(Report).options(joinedload(Report.reporter)).where(Report.id == report.id))
     return ApiResponse(message="Жалоба обработана", data=ReportRead.model_validate(report))

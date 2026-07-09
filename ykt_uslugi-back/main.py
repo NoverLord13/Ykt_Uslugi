@@ -19,7 +19,7 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    seed_categories()
+    await seed_categories()
     await asyncio.to_thread(ensure_upload_thumbnails)
     maintenance_task = asyncio.create_task(deal_maintenance_loop())
     try:
@@ -60,5 +60,5 @@ app.include_router(admin.router)
 
 
 @app.get("/")
-def read_root() -> dict[str, str]:
+async def read_root() -> dict[str, str]:
     return {"Hello": "World"}

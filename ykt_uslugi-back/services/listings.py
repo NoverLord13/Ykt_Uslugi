@@ -1,10 +1,11 @@
 from decimal import Decimal
 
 from fastapi import UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.domain_types import ListingType, PriceType, ServiceStatus
-from models.service import Category, Service, Subcategory
+from models.service import Service, Category, Subcategory
 
 MAX_SERVICE_IMAGES = 8
 
@@ -16,17 +17,19 @@ class ListingValidationError(Exception):
         self.detail = detail
 
 
-def validate_category_pair(db: Session, category_id: int | None, subcategory_id: int | None) -> None:
-    if category_id is not None and not db.query(Category.id).filter(Category.id == category_id).first():
+async def validate_category_pair(db: AsyncSession, category_id: int | None, subcategory_id: int | None) -> None:
+    if category_id is not None and not await db.scalar(select(Category.id).where(Category.id == category_id)):
         raise ListingValidationError(400, "Категория не найдена")
     if subcategory_id is None:
         return
     if category_id is None:
         raise ListingValidationError(400, "Сначала выберите категорию")
-    subcategory = db.query(Subcategory.category_id).filter(Subcategory.id == subcategory_id).first()
-    if not subcategory:
+    subcategory_category_id = await db.scalar(
+        select(Subcategory.category_id).where(Subcategory.id == subcategory_id)
+    )
+    if subcategory_category_id is None:
         raise ListingValidationError(400, "Подкатегория не найдена")
-    if subcategory.category_id != category_id:
+    if subcategory_category_id != category_id:
         raise ListingValidationError(400, "Подкатегория не принадлежит выбранной категории")
 
 
@@ -47,8 +50,8 @@ def collect_uploads(image: UploadFile | None, images: list[UploadFile] | None) -
     return upload_files
 
 
-def apply_service_update(
-    db: Session,
+async def apply_service_update(
+    db: AsyncSession,
     service: Service,
     *,
     owner_phone: str,
@@ -80,7 +83,7 @@ def apply_service_update(
     if category_id is not None or subcategory_id is not None or clear_category or clear_subcategory:
         next_category_id = None if clear_category else category_id if category_id is not None else service.category_id
         next_subcategory_id = None if clear_category or clear_subcategory else subcategory_id if subcategory_id is not None else service.subcategory_id
-        validate_category_pair(db, next_category_id, next_subcategory_id)
+        await validate_category_pair(db, next_category_id, next_subcategory_id)
         service.category_id = next_category_id
         service.subcategory_id = next_subcategory_id
     if location is not None:

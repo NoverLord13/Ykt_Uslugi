@@ -111,7 +111,7 @@ cd ykt_uslugi-back
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-export DATABASE_URL=postgresql+psycopg://ykt_uslugi:ykt_uslugi@localhost:5432/ykt_uslugi
+export DATABASE_URL=postgresql+asyncpg://ykt_uslugi:ykt_uslugi@localhost:5432/ykt_uslugi
 alembic upgrade head
 uvicorn main:app --reload
 ```
@@ -157,7 +157,7 @@ SMS был отправлен на номер +79990000000. Код: 1234
 | --- | --- | --- |
 | `ENVIRONMENT` | `development` | Режим приложения |
 | `SECRET_KEY` | development-ключ | Подпись JWT; в production обязателен собственный секрет |
-| `DATABASE_URL` | `postgresql+psycopg://ykt_uslugi:ykt_uslugi@localhost:5432/ykt_uslugi` | URL SQLAlchemy |
+| `DATABASE_URL` | `postgresql+asyncpg://ykt_uslugi:ykt_uslugi@localhost:5432/ykt_uslugi` | async URL SQLAlchemy |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Срок жизни access token |
 | `SMS_CODE_TTL_SECONDS` | `300` | Срок действия SMS-кода |
 | `SMS_RESEND_COOLDOWN_SECONDS` | `60` | Интервал повторной отправки |
@@ -171,7 +171,7 @@ SMS был отправлен на номер +79990000000. Код: 1234
 ENVIRONMENT=development \
 SECRET_KEY=local-secret \
 CORS_ORIGINS=http://localhost:5173 \
-DATABASE_URL=postgresql+psycopg://ykt_uslugi:ykt_uslugi@localhost:5432/ykt_uslugi \
+DATABASE_URL=postgresql+asyncpg://ykt_uslugi:ykt_uslugi@localhost:5432/ykt_uslugi \
 uvicorn main:app --reload
 ```
 

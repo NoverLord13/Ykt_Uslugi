@@ -1,6 +1,8 @@
+import asyncio
 import unittest
 
-from sqlalchemy import CheckConstraint, create_engine
+from sqlalchemy import CheckConstraint
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from database import Base, SQLALCHEMY_DATABASE_URL
 from models import response, review, service, user  # noqa: F401
@@ -8,7 +10,7 @@ from models import response, review, service, user  # noqa: F401
 
 class DatabaseSchemaTests(unittest.TestCase):
     def test_default_database_url_uses_postgresql_driver(self) -> None:
-        self.assertTrue(SQLALCHEMY_DATABASE_URL.startswith(("postgresql+psycopg://", "sqlite://")))
+        self.assertTrue(SQLALCHEMY_DATABASE_URL.startswith(("postgresql+asyncpg://", "sqlite+aiosqlite://")))
 
     def test_business_constraints_are_declared_in_metadata(self) -> None:
         expected_constraints = {
@@ -37,12 +39,16 @@ class DatabaseSchemaTests(unittest.TestCase):
             self.assertTrue(constraint_names.issubset(actual_names))
 
     def test_sqlite_test_schema_still_builds_for_unit_tests(self) -> None:
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         try:
-            Base.metadata.create_all(engine)
+            async def build_schema() -> None:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                    await conn.run_sync(Base.metadata.drop_all)
+
+            asyncio.run(build_schema())
         finally:
-            Base.metadata.drop_all(engine)
-            engine.dispose()
+            asyncio.run(engine.dispose())
 
 
 if __name__ == "__main__":

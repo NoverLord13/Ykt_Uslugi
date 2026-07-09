@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.domain_types import DealUpdateStatus
 from models.response import ServiceResponse
@@ -18,31 +19,30 @@ class DealTransitionError(Exception):
 
 
 def utc_now_naive() -> datetime:
-    """Return UTC in the representation currently used by the database schema."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def utc_from_storage(value: datetime) -> datetime:
-    """Interpret database datetimes consistently as UTC."""
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
-def auto_complete_overdue(db: Session) -> int:
-    """Complete overdue deals in the caller's transaction and return the count."""
+async def auto_complete_overdue(db: AsyncSession) -> int:
     now = utc_now_naive()
     cutoff = now - timedelta(hours=AUTO_COMPLETE_HOURS)
-    return db.query(ServiceResponse).filter(
-        ServiceResponse.status == "work_submitted",
-        ServiceResponse.work_submitted_at.is_not(None),
-        ServiceResponse.work_submitted_at <= cutoff,
-    ).update(
-        {
-            ServiceResponse.status: "completed",
-            ServiceResponse.completed_at: now,
-            ServiceResponse.status_note: "Завершено автоматически: заказчик не открыл спор в течение 72 часов",
-        },
-        synchronize_session=False,
+    result = await db.execute(
+        update(ServiceResponse)
+        .where(
+            ServiceResponse.status == "work_submitted",
+            ServiceResponse.work_submitted_at.is_not(None),
+            ServiceResponse.work_submitted_at <= cutoff,
+        )
+        .values(
+            status="completed",
+            completed_at=now,
+            status_note="Завершено автоматически: заказчик не открыл спор в течение 72 часов",
+        )
     )
+    return result.rowcount or 0
 
 
 def deal_roles(item: ServiceResponse) -> tuple[int, int]:
@@ -51,7 +51,14 @@ def deal_roles(item: ServiceResponse) -> tuple[int, int]:
     return item.respondent_id, item.service.owner_id
 
 
-def apply_transition(db: Session, item: ServiceResponse, *, user_id: int, next_status: DealUpdateStatus, note: str | None) -> None:
+async def apply_transition(
+    db: AsyncSession,
+    item: ServiceResponse,
+    *,
+    user_id: int,
+    next_status: DealUpdateStatus,
+    note: str | None,
+) -> None:
     customer_id, performer_id = deal_roles(item)
     is_customer = user_id == customer_id
     is_performer = user_id == performer_id
@@ -67,18 +74,24 @@ def apply_transition(db: Session, item: ServiceResponse, *, user_id: int, next_s
         if item.service.owner_id != user_id or item.status != "new":
             raise DealTransitionError(403, "Принять новый отклик может только автор объявления")
         if item.service.listing_type == "request":
-            active_deal = db.query(ServiceResponse.id).filter(
-                ServiceResponse.service_id == item.service_id,
-                ServiceResponse.status.in_(("accepted", "work_submitted", "revision_requested", "disputed")),
-                ServiceResponse.id != item.id,
-            ).first()
+            active_deal = await db.scalar(
+                select(ServiceResponse.id).where(
+                    ServiceResponse.service_id == item.service_id,
+                    ServiceResponse.status.in_(("accepted", "work_submitted", "revision_requested", "disputed")),
+                    ServiceResponse.id != item.id,
+                )
+            )
             if active_deal:
                 raise DealTransitionError(409, "Для этого задания уже выбран исполнитель")
-            db.query(ServiceResponse).filter(
-                ServiceResponse.service_id == item.service_id,
-                ServiceResponse.status == "new",
-                ServiceResponse.id != item.id,
-            ).update({ServiceResponse.status: "declined"}, synchronize_session=False)
+            await db.execute(
+                update(ServiceResponse)
+                .where(
+                    ServiceResponse.service_id == item.service_id,
+                    ServiceResponse.status == "new",
+                    ServiceResponse.id != item.id,
+                )
+                .values(status="declined")
+            )
         item.status_note = None
     elif next_status == "work_submitted":
         if not is_performer or item.status not in {"accepted", "revision_requested"}:
