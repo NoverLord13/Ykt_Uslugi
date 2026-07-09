@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import conv
 
 from database import Base
 
@@ -10,6 +11,8 @@ class Review(Base):
     __tablename__ = "reviews"
     __table_args__ = (
         UniqueConstraint("author_id", "response_id", name="uq_reviews_author_response"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name=conv("ck_reviews_rating_range")),
+        CheckConstraint("review_type IN ('performer', 'customer')", name=conv("ck_reviews_review_type_valid")),
         Index("ix_reviews_target_created", "target_user_id", "created_at"),
     )
 
@@ -27,5 +30,5 @@ class Review(Base):
 
     author = relationship("User", foreign_keys=[author_id], back_populates="reviews_written")
     target_user = relationship("User", foreign_keys=[target_user_id], back_populates="reviews_received")
-    service = relationship("Service")
-    response = relationship("ServiceResponse")
+    service = relationship("Service", back_populates="reviews")
+    response = relationship("ServiceResponse", back_populates="reviews")

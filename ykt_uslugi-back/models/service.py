@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import conv
 
 from database import Base
 
@@ -19,6 +20,7 @@ class Category(Base):
         back_populates="category",
         cascade="all, delete-orphan",
     )
+    services: Mapped[list["Service"]] = relationship("Service", back_populates="category")
 
 
 class Subcategory(Base):
@@ -32,10 +34,14 @@ class Subcategory(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     category: Mapped[Category] = relationship("Category", back_populates="subcategories")
+    services: Mapped[list["Service"]] = relationship("Service", back_populates="subcategory")
 
 
 class ServiceImage(Base):
     __tablename__ = "service_images"
+    __table_args__ = (
+        CheckConstraint("position >= 0", name=conv("ck_service_images_position_non_negative")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id", ondelete="CASCADE"), index=True)
@@ -49,6 +55,10 @@ class ServiceImage(Base):
 class Service(Base):
     __tablename__ = "services"
     __table_args__ = (
+        CheckConstraint("listing_type IN ('offer', 'request')", name=conv("ck_services_listing_type_valid")),
+        CheckConstraint("price_type IN ('fixed', 'from', 'negotiable')", name=conv("ck_services_price_type_valid")),
+        CheckConstraint("status IN ('active', 'hidden', 'moderation', 'closed')", name=conv("ck_services_status_valid")),
+        CheckConstraint("price IS NULL OR price >= 0", name=conv("ck_services_price_non_negative")),
         Index("ix_services_active_created", "status", "is_active", "created_at"),
         Index("ix_services_discovery", "listing_type", "category_id", "status", "created_at"),
     )
@@ -70,8 +80,8 @@ class Service(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
-    category: Mapped[Category | None] = relationship("Category")
-    subcategory: Mapped[Subcategory | None] = relationship("Subcategory")
+    category: Mapped[Category | None] = relationship("Category", back_populates="services")
+    subcategory: Mapped[Subcategory | None] = relationship("Subcategory", back_populates="services")
     images: Mapped[list[ServiceImage]] = relationship(
         "ServiceImage",
         back_populates="service",
@@ -80,3 +90,4 @@ class Service(Base):
     )
     owner = relationship("User", back_populates="services")
     responses = relationship("ServiceResponse", back_populates="service", cascade="all, delete-orphan")
+    reviews = relationship("Review", back_populates="service")

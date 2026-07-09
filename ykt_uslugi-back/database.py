@@ -1,15 +1,26 @@
 from collections.abc import Generator
 
 from sqlalchemy import create_engine, event
+from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from core.config import DATABASE_URL
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
+def _normalize_database_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
 
 
-if DATABASE_URL.startswith("sqlite"):
+SQLALCHEMY_DATABASE_URL = _normalize_database_url(DATABASE_URL)
+connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
+
+
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
@@ -17,8 +28,18 @@ if DATABASE_URL.startswith("sqlite"):
         cursor.close()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+naming_convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
 
 class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention=naming_convention)
+
     pass
 
 

@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, String, Text, func
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import conv
 
 from database import Base
 
@@ -9,6 +10,10 @@ from database import Base
 class ServiceResponse(Base):
     __tablename__ = "service_responses"
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('new', 'accepted', 'work_submitted', 'revision_requested', 'disputed', 'completed', 'cancelled', 'declined')",
+            name=conv("ck_service_responses_status_valid"),
+        ),
         Index("ix_responses_respondent_created", "respondent_id", "created_at"),
         Index("ix_responses_service_status", "service_id", "status"),
         Index("ix_responses_status_submitted", "status", "work_submitted_at"),
@@ -27,11 +32,15 @@ class ServiceResponse(Base):
 
     service = relationship("Service", back_populates="responses")
     respondent = relationship("User", back_populates="responses")
+    reviews = relationship("Review", back_populates="response")
 
 
 class Report(Base):
     __tablename__ = "reports"
     __table_args__ = (
+        CheckConstraint("target_type IN ('service', 'user', 'review')", name=conv("ck_reports_target_type_valid")),
+        CheckConstraint("status IN ('new', 'reviewed', 'resolved', 'rejected')", name=conv("ck_reports_status_valid")),
+        CheckConstraint("reason IN ('spam', 'fraud', 'abuse', 'illegal', 'wrong_info', 'other')", name=conv("ck_reports_reason_valid")),
         Index("ix_reports_duplicate_lookup", "reporter_id", "target_type", "target_id", "status"),
     )
 
